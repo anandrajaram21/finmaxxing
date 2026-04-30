@@ -1,16 +1,11 @@
 import { relations, sql } from "drizzle-orm";
 import { index, sqliteTable } from "drizzle-orm/sqlite-core";
 
-/**
- * Multi-project schema prefix helper
- */
-
-// Posts example table
-export const posts = sqliteTable(
-  "post",
+export const notes = sqliteTable(
+  "note",
   (d) => ({
     id: d.integer({ mode: "number" }).primaryKey({ autoIncrement: true }),
-    name: d.text({ length: 256 }),
+    content: d.text({ length: 2000 }).notNull(),
     createdById: d
       .text({ length: 255 })
       .notNull()
@@ -22,8 +17,8 @@ export const posts = sqliteTable(
     updatedAt: d.integer({ mode: "timestamp" }).$onUpdate(() => new Date()),
   }),
   (t) => [
-    index("created_by_idx").on(t.createdById),
-    index("name_idx").on(t.name),
+    index("note_created_by_idx").on(t.createdById),
+    index("note_created_at_idx").on(t.createdAt),
   ],
 );
 
@@ -47,7 +42,12 @@ export const user = sqliteTable("user", (d) => ({
 
 export const userRelations = relations(user, ({ many }) => ({
   account: many(account),
+  notes: many(notes),
   session: many(session),
+}));
+
+export const noteRelations = relations(notes, ({ one }) => ({
+  createdBy: one(user, { fields: [notes.createdById], references: [user.id] }),
 }));
 
 export const account = sqliteTable(
