@@ -1,6 +1,6 @@
-# Finmaxxing Notes
+# Finmaxxing
 
-A small Next.js app with Google auth, tRPC, Drizzle, and per-user notes.
+A small Next.js app with Google auth, tRPC, Drizzle, and per-user portfolio tracking.
 
 ## Development
 
@@ -11,11 +11,14 @@ bun install
 bun run dev
 ```
 
-Apply schema changes:
+Apply schema changes directly from `src/server/db/schema.ts`:
 
 ```bash
 bun run db:push
 ```
+
+Database schema history lives in Git through changes to `src/server/db/schema.ts`;
+this project does not commit generated Drizzle SQL migration files.
 
 ## Environment
 
