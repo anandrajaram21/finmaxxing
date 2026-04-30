@@ -1,86 +1,69 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { NoteEditor } from "@/app/_components/note-editor";
 import { auth } from "@/server/better-auth";
 import { getSession } from "@/server/better-auth/server";
-import { api, HydrateClient } from "@/trpc/server";
 
 export default async function Home() {
   const session = await getSession();
 
-  if (session) {
-    void api.note.list.prefetch();
-  }
-
   return (
-    <HydrateClient>
-      <main className="min-h-screen bg-slate-100 text-slate-950">
-        <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-8 px-5 py-8 sm:px-8">
-          <header className="flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-normal">
-                Finmaxxing Notes
-              </h1>
-              {session?.user ? (
-                <p className="mt-2 text-sm text-slate-600">
-                  Signed in as {session.user.email}
-                </p>
-              ) : null}
-            </div>
+    <main className="flex min-h-screen flex-col bg-neutral-950 text-white">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-8 px-6 py-16">
+        <div>
+          <h1 className="text-4xl font-semibold">Finmaxxing</h1>
+          <p className="mt-3 max-w-2xl text-neutral-300">
+            Portfolio and goal tracking database is ready. Use the authenticated
+            session to attach goals, investments, allocations, and transactions
+            to the current user.
+          </p>
+        </div>
 
-            {!session ? (
-              <form>
-                <button
-                  className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                  formAction={async () => {
-                    "use server";
-                    const res = await auth.api.signInSocial({
-                      body: {
-                        provider: "google",
-                        callbackURL: "/",
-                      },
-                    });
-                    if (!res.url) {
-                      throw new Error("No URL returned from signInSocial");
-                    }
-                    redirect(res.url);
-                  }}
-                >
-                  Sign in with Google
-                </button>
-              </form>
-            ) : (
-              <form>
-                <button
-                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
-                  formAction={async () => {
-                    "use server";
-                    await auth.api.signOut({
-                      headers: await headers(),
-                    });
-                    redirect("/");
-                  }}
-                >
-                  Sign out
-                </button>
-              </form>
-            )}
-          </header>
-
-          {session?.user ? (
-            <NoteEditor />
+        <div className="flex flex-col gap-4">
+          {session && (
+            <p className="text-neutral-300">
+              Logged in as {session.user?.name}
+            </p>
+          )}
+          {!session ? (
+            <form>
+              <button
+                className="w-fit rounded-md bg-white px-5 py-2 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200"
+                formAction={async () => {
+                  "use server";
+                  const res = await auth.api.signInSocial({
+                    body: {
+                      provider: "google",
+                      callbackURL: "/",
+                    },
+                  });
+                  if (!res.url) {
+                    throw new Error("No URL returned from signInSocial");
+                  }
+                  redirect(res.url);
+                }}
+              >
+                Sign in with Google
+              </button>
+            </form>
           ) : (
-            <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">Sign in to continue</h2>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-                Your notes are saved to your account and only shown when you are
-                signed in.
-              </p>
-            </section>
+            <form>
+              <button
+                className="w-fit rounded-md bg-white px-5 py-2 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200"
+                formAction={async () => {
+                  "use server";
+                  await auth.api.signOut({
+                    headers: await headers(),
+                  });
+                  redirect("/");
+                }}
+              >
+                Sign out
+              </button>
+            </form>
           )}
         </div>
-      </main>
-    </HydrateClient>
+      </div>
+    </main>
   );
 }
