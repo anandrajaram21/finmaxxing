@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "@phosphor-icons/react";
+import { MoonIcon, SunIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 
@@ -50,9 +50,9 @@ export function ThemeToggle() {
       variant="outline"
     >
       {isDark ? (
-        <Moon className="size-4" weight="bold" />
+        <MoonIcon className="size-4" weight="bold" />
       ) : (
-        <Sun className="size-4" weight="bold" />
+        <SunIcon className="size-4" weight="bold" />
       )}
       {isDark ? "Dark" : "Light"}
     </Button>
