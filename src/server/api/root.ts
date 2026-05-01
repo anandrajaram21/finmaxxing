@@ -3,8 +3,10 @@ import {
   createTRPCRouter,
   publicProcedure,
 } from "@/server/api/trpc";
+import { goalsRouter } from "@/server/api/routers/goals";
 
 export const appRouter = createTRPCRouter({
+  goals: goalsRouter,
   health: publicProcedure.query(() => ({ ok: true })),
 });
 

@@ -37,6 +37,8 @@ export type SectionKey =
   | "allocations"
   | "assumptions";
 
+type WorkspaceSectionKey = Exclude<SectionKey, "assumptions">;
+
 type Field = {
   label: string;
   name: string;
@@ -89,8 +91,13 @@ type Section = {
   rows: TableRow[];
 };
 
-const sectionActions: Partial<
-  Record<SectionKey, (formData: FormData) => Promise<void>>
+type WorkspaceSection = Section & {
+  key: WorkspaceSectionKey;
+};
+
+const sectionActions: Record<
+  WorkspaceSectionKey,
+  (formData: FormData) => Promise<void>
 > = {
   allocations: saveAllocation,
   goals: saveGoal,
@@ -616,13 +623,13 @@ export async function FinanceWorkspace({
   sectionKey,
 }: {
   fieldOptions?: FieldOptions;
-  sectionKey: SectionKey;
+  sectionKey: WorkspaceSectionKey;
 }) {
   const workspaceData = await getWorkspaceData();
   const section = {
     ...sections[sectionKey],
     ...workspaceData.sections[sectionKey],
-  };
+  } as WorkspaceSection;
   const sectionFieldOptions = {
     ...fieldOptions?.[sectionKey],
     ...workspaceData.fieldOptions[sectionKey],
@@ -1511,9 +1518,10 @@ function WorkspaceHeader({
   section,
 }: {
   fieldOptions?: Partial<Record<string, FieldOption[]>>;
-  section: Section;
+  section: WorkspaceSection;
 }) {
   const Icon = section.icon;
+  const action = sectionActions[section.key];
 
   return (
     <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
@@ -1530,7 +1538,7 @@ function WorkspaceHeader({
         </p>
       </div>
       <ResourceDialog
-        action={sectionActions[section.key]}
+        action={action}
         actionLabel={section.actionLabel}
         fieldOptions={fieldOptions}
         fields={section.fields}

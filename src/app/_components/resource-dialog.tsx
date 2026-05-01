@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { CaretDownIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ type FieldOption = {
 
 type ResourceDialogProps = {
   actionLabel: string;
-  action?: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => void | Promise<void>;
   fields: Field[];
   fieldOptions?: Partial<Record<string, FieldOption[]>>;
   label: string;
@@ -130,15 +131,23 @@ export function ResourceDialog({
                 >
                   Cancel
                 </Button>
-                <Button disabled={!action} type="submit">
-                  <PlusIcon className="size-4" weight="bold" />
-                  {actionLabel}
-                </Button>
+                <SubmitButton actionLabel={actionLabel} />
               </div>
             </form>
           </div>
         </div>
       ) : null}
     </>
+  );
+}
+
+function SubmitButton({ actionLabel }: { actionLabel: string }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button disabled={pending} type="submit">
+      <PlusIcon className="size-4" weight="bold" />
+      {pending ? "Saving" : actionLabel}
+    </Button>
   );
 }
