@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { auth } from "@/server/better-auth";
 import { getSession } from "@/server/better-auth/server";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./theme-toggle";
 
 type SectionKey = "goals" | "investments" | "transactions" | "allocations";
 
@@ -301,12 +302,12 @@ export function FinanceWorkspace({ sectionKey }: { sectionKey: SectionKey }) {
   const section = sections[sectionKey];
 
   return (
-    <main className="bg-background text-foreground min-h-screen">
-      <div className="flex min-h-screen w-full flex-col lg:flex-row">
+    <main className="bg-background text-foreground h-screen overflow-hidden">
+      <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey={sectionKey} />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <WorkspaceHeader section={section} />
-          <section className="flex-1 space-y-6 px-4 py-5 sm:px-6 lg:px-10">
+          <section className="min-h-0 flex-1 space-y-6 overflow-auto px-4 py-5 sm:px-6 lg:px-10">
             <StatsGrid stats={section.stats} />
             <div className="grid gap-6 xl:grid-cols-[minmax(320px,380px)_1fr]">
               <DefinitionForm section={section} />
@@ -323,7 +324,7 @@ async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   const session = await getSession();
 
   return (
-    <aside className="border-border bg-sidebar/70 flex w-full flex-col border-b lg:min-h-screen lg:w-68 lg:border-r lg:border-b-0">
+    <aside className="border-border bg-sidebar/70 flex min-h-0 w-full flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-4 lg:block">
         <Link href="/goals" className="flex items-center gap-3">
           <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
@@ -366,7 +367,10 @@ async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
         })}
       </nav>
 
-      <div className="mt-auto hidden border-t p-3 lg:block">
+      <div className="mt-auto border-t p-3 lg:shrink-0">
+        <div className="mb-3">
+          <ThemeToggle />
+        </div>
         {session ? (
           <div className="space-y-3">
             <div>
