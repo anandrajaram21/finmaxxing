@@ -26,6 +26,7 @@ import {
   transactions,
 } from "@/server/db/schema";
 import { cn } from "@/lib/utils";
+import { GoalCreateDialog } from "./goal-create-dialog";
 import { ThemeToggle } from "./theme-toggle";
 import { ResourceDialog } from "./resource-dialog";
 import { ResourceTable } from "./resource-table";
@@ -1537,13 +1538,20 @@ function WorkspaceHeader({
           {section.description}
         </p>
       </div>
-      <ResourceDialog
-        action={action}
-        actionLabel={section.actionLabel}
-        fieldOptions={fieldOptions}
-        fields={section.fields}
-        label={section.label}
-      />
+      {section.key === "goals" ? (
+        <GoalCreateDialog
+          actionLabel={section.actionLabel}
+          label={section.label}
+        />
+      ) : (
+        <ResourceDialog
+          action={action}
+          actionLabel={section.actionLabel}
+          fieldOptions={fieldOptions}
+          fields={section.fields}
+          label={section.label}
+        />
+      )}
     </header>
   );
 }
