@@ -161,7 +161,6 @@ export const goals = createTable(
     name: d.text({ length: 255 }).notNull(),
     targetAmountMinor: d.integer({ mode: "number" }).notNull(),
     targetYear: d.integer({ mode: "number" }).notNull(),
-    sortOrder: d.integer({ mode: "number" }).notNull().default(0),
     createdAt: d
       .integer({ mode: "timestamp" })
       .default(sql`(unixepoch())`)

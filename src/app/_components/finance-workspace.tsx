@@ -1,12 +1,14 @@
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ArrowsSplitIcon,
   ChartLineUpIcon,
   CurrencyInrIcon,
   ReceiptIcon,
+  SlidersHorizontalIcon,
   SignOutIcon,
   TargetIcon,
 } from "@phosphor-icons/react/ssr";
@@ -28,12 +30,18 @@ import { ThemeToggle } from "./theme-toggle";
 import { ResourceDialog } from "./resource-dialog";
 import { ResourceTable } from "./resource-table";
 
-type SectionKey = "goals" | "investments" | "transactions" | "allocations";
+export type SectionKey =
+  | "goals"
+  | "investments"
+  | "transactions"
+  | "allocations"
+  | "assumptions";
 
 type Field = {
   label: string;
   name: string;
   placeholder: string;
+  required?: boolean;
   type?: string;
 };
 
@@ -81,6 +89,15 @@ type Section = {
   rows: TableRow[];
 };
 
+const sectionActions: Partial<
+  Record<SectionKey, (formData: FormData) => Promise<void>>
+> = {
+  allocations: saveAllocation,
+  goals: saveGoal,
+  investments: saveInvestment,
+  transactions: saveTransaction,
+};
+
 const sections: Record<SectionKey, Section> = {
   goals: {
     key: "goals",
@@ -89,11 +106,11 @@ const sections: Record<SectionKey, Section> = {
     eyebrow: "Planning",
     title: "Goals",
     description:
-      "Define target amounts, target years, and ordering for every financial goal.",
+      "Define target amounts and target years for every financial goal.",
     icon: TargetIcon,
     actionLabel: "Add goal",
     stats: [
-      { label: "Active goals", value: "4", detail: "Ordered by priority" },
+      { label: "Active goals", value: "4", detail: "Sorted by target year" },
       {
         label: "Projected need",
         value: "INR 4.27Cr",
@@ -117,12 +134,6 @@ const sections: Record<SectionKey, Section> = {
         label: "Target year",
         name: "targetYear",
         placeholder: "2034",
-        type: "number",
-      },
-      {
-        label: "Sort order",
-        name: "sortOrder",
-        placeholder: "1",
         type: "number",
       },
     ],
@@ -201,8 +212,18 @@ const sections: Record<SectionKey, Section> = {
         name: "tickerSymbol",
         placeholder: "NIFTYBEES",
       },
-      { label: "ISIN", name: "isin", placeholder: "INF204KB16I7" },
-      { label: "Category", name: "category", placeholder: "Equity index" },
+      {
+        label: "ISIN",
+        name: "isin",
+        placeholder: "INF204KB16I7",
+        required: false,
+      },
+      {
+        label: "Category",
+        name: "category",
+        placeholder: "Equity index",
+        required: false,
+      },
       {
         label: "Monthly SIP",
         name: "monthlySipMinor",
@@ -213,6 +234,7 @@ const sections: Record<SectionKey, Section> = {
         label: "Current NAV",
         name: "currentNav",
         placeholder: "248.52",
+        required: false,
         type: "number",
       },
     ],
@@ -288,7 +310,12 @@ const sections: Record<SectionKey, Section> = {
       },
       { label: "Units", name: "units", placeholder: "100.596", type: "number" },
       { label: "NAV", name: "nav", placeholder: "248.52", type: "number" },
-      { label: "Notes", name: "notes", placeholder: "Monthly SIP" },
+      {
+        label: "Notes",
+        name: "notes",
+        placeholder: "Monthly SIP",
+        required: false,
+      },
     ],
     tableColumns: [
       { label: "Date" },
@@ -377,6 +404,48 @@ const sections: Record<SectionKey, Section> = {
       { cells: ["Debt Fund", "Emergency reserve", "100%", "INR 12k"] },
     ],
   },
+  assumptions: {
+    key: "assumptions",
+    href: "/assumptions",
+    label: "Assumptions",
+    eyebrow: "Model",
+    title: "Assumptions",
+    description:
+      "Define the base year, inflation rate, and expected return used in projections.",
+    icon: SlidersHorizontalIcon,
+    actionLabel: "Update assumptions",
+    stats: [
+      { label: "Base year", value: "2026", detail: "Projection start" },
+      { label: "Inflation", value: "6%", detail: "Annual assumption" },
+      { label: "Expected return", value: "10%", detail: "Annual assumption" },
+    ],
+    fields: [
+      {
+        label: "Base year",
+        name: "currentYear",
+        placeholder: "2026",
+        type: "number",
+      },
+      {
+        label: "Inflation rate",
+        name: "inflationRate",
+        placeholder: "6",
+        type: "number",
+      },
+      {
+        label: "Expected return",
+        name: "expectedReturnRate",
+        placeholder: "10",
+        type: "number",
+      },
+    ],
+    tableColumns: [
+      { label: "Base year", align: "center" },
+      { label: "Inflation", align: "right" },
+      { label: "Expected return", align: "right" },
+    ],
+    rows: [],
+  },
 };
 
 const navItems = Object.values(sections);
@@ -401,6 +470,146 @@ type InvestmentReturn = {
   totalSoldMinor: number;
   xirr: number | null;
 };
+
+async function saveGoal(formData: FormData) {
+  "use server";
+
+  const userId = await getRequiredUserId();
+  const name = parseText(formData.get("name"), "Goal name");
+  const targetAmountMinor = parseMoneyMinor(
+    formData.get("targetAmountMinor"),
+    "Target amount",
+  );
+  const targetYear = parsePositiveInteger(
+    formData.get("targetYear"),
+    "Target year",
+  );
+
+  await db
+    .insert(goals)
+    .values({
+      name,
+      targetAmountMinor,
+      targetYear,
+      userId,
+    })
+    .onConflictDoUpdate({
+      set: {
+        targetAmountMinor,
+        targetYear,
+        updatedAt: new Date(),
+      },
+      target: [goals.userId, goals.name],
+    });
+
+  revalidateWorkspace();
+  redirect("/goals");
+}
+
+async function saveInvestment(formData: FormData) {
+  "use server";
+
+  const userId = await getRequiredUserId();
+  const currentNav = parseOptionalPositiveNumber(
+    formData.get("currentNav"),
+    "Current NAV",
+  );
+
+  await db
+    .insert(investments)
+    .values({
+      category: parseOptionalText(formData.get("category")),
+      currentNav,
+      isin: parseOptionalText(formData.get("isin")),
+      monthlySipMinor: parseMoneyMinor(
+        formData.get("monthlySipMinor"),
+        "Monthly SIP",
+      ),
+      name: parseText(formData.get("name"), "Investment name"),
+      navUpdatedAt: currentNav ? new Date() : null,
+      tickerSymbol: parseText(formData.get("tickerSymbol"), "Ticker symbol"),
+      userId,
+    })
+    .onConflictDoUpdate({
+      set: {
+        category: parseOptionalText(formData.get("category")),
+        currentNav,
+        isin: parseOptionalText(formData.get("isin")),
+        monthlySipMinor: parseMoneyMinor(
+          formData.get("monthlySipMinor"),
+          "Monthly SIP",
+        ),
+        name: parseText(formData.get("name"), "Investment name"),
+        navUpdatedAt: currentNav ? new Date() : null,
+        updatedAt: new Date(),
+      },
+      target: [investments.userId, investments.tickerSymbol],
+    });
+
+  revalidateWorkspace();
+  redirect("/investments");
+}
+
+async function saveTransaction(formData: FormData) {
+  "use server";
+
+  const userId = await getRequiredUserId();
+  const investmentId = parsePositiveInteger(
+    formData.get("investmentId"),
+    "Investment",
+  );
+  await assertInvestmentBelongsToUser(investmentId, userId);
+
+  await db.insert(transactions).values({
+    amountMinor: parseMoneyMinor(formData.get("amountMinor"), "Amount"),
+    investmentId,
+    nav: parsePositiveNumber(formData.get("nav"), "NAV"),
+    notes: parseOptionalText(formData.get("notes")),
+    transactionDate: parseDate(formData.get("transactionDate"), "Date"),
+    type: parseTransactionType(formData.get("type")),
+    units: parsePositiveNumber(formData.get("units"), "Units"),
+    userId,
+  });
+
+  revalidateWorkspace();
+  redirect("/transactions");
+}
+
+async function saveAllocation(formData: FormData) {
+  "use server";
+
+  const userId = await getRequiredUserId();
+  const goalId = parsePositiveInteger(formData.get("goalId"), "Goal");
+  const investmentId = parsePositiveInteger(
+    formData.get("investmentId"),
+    "Investment",
+  );
+  await Promise.all([
+    assertGoalBelongsToUser(goalId, userId),
+    assertInvestmentBelongsToUser(investmentId, userId),
+  ]);
+
+  const percentage = parseAllocationPercentage(formData.get("percentage"));
+
+  await db
+    .insert(allocations)
+    .values({
+      goalId,
+      investmentId,
+      percentage,
+      userId,
+    })
+    .onConflictDoUpdate({
+      set: {
+        percentage,
+        updatedAt: new Date(),
+      },
+      target: [allocations.investmentId, allocations.goalId],
+    });
+
+  revalidateWorkspace();
+  redirect("/allocations");
+}
 
 export async function FinanceWorkspace({
   fieldOptions,
@@ -459,7 +668,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
         .select()
         .from(goals)
         .where(eq(goals.userId, userId))
-        .orderBy(asc(goals.sortOrder), asc(goals.name)),
+        .orderBy(asc(goals.targetYear), asc(goals.name)),
       db
         .select()
         .from(investments)
@@ -478,7 +687,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
         .innerJoin(investments, eq(allocations.investmentId, investments.id))
         .innerJoin(goals, eq(allocations.goalId, goals.id))
         .where(eq(allocations.userId, userId))
-        .orderBy(asc(investments.name), asc(goals.sortOrder)),
+        .orderBy(asc(investments.name), asc(goals.targetYear), asc(goals.name)),
       db
         .select({
           amountMinor: transactions.amountMinor,
@@ -743,7 +952,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
       goals: {
         stats: [
           {
-            detail: "Ordered by priority",
+            detail: "Sorted by target year",
             label: "Active goals",
             value: String(goalRows.length),
           },
@@ -837,6 +1046,35 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
           tone: index === 0 ? "accent" : "normal",
         })),
       },
+      assumptions: {
+        stats: [
+          {
+            detail: "Projection start",
+            label: "Base year",
+            value: String(assumption.currentYear),
+          },
+          {
+            detail: "Annual assumption",
+            label: "Inflation",
+            value: formatPercent(assumption.inflationRate),
+          },
+          {
+            detail: "Annual assumption",
+            label: "Expected return",
+            value: formatPercent(assumption.expectedReturnRate),
+          },
+        ],
+        rows: [
+          {
+            cells: [
+              String(assumption.currentYear),
+              formatPercent(assumption.inflationRate),
+              formatPercent(assumption.expectedReturnRate),
+            ],
+            tone: "accent",
+          },
+        ],
+      },
     },
   };
 }
@@ -913,11 +1151,127 @@ function getEmptyWorkspaceData(): WorkspaceData {
     fieldOptions: {},
     sections: {
       allocations: { rows: [], stats: emptyStats },
+      assumptions: { rows: [], stats: emptyStats },
       goals: { rows: [], stats: emptyStats },
       investments: { rows: [], stats: emptyStats },
       transactions: { rows: [], stats: emptyStats },
     },
   };
+}
+
+async function getRequiredUserId() {
+  const session = await getSession();
+  if (!session?.user?.id) redirect("/");
+
+  return session.user.id;
+}
+
+async function assertGoalBelongsToUser(goalId: number, userId: string) {
+  const rows = await db
+    .select({ id: goals.id })
+    .from(goals)
+    .where(and(eq(goals.id, goalId), eq(goals.userId, userId)))
+    .limit(1);
+
+  if (!rows[0]) throw new Error("Selected goal was not found.");
+}
+
+async function assertInvestmentBelongsToUser(
+  investmentId: number,
+  userId: string,
+) {
+  const rows = await db
+    .select({ id: investments.id })
+    .from(investments)
+    .where(
+      and(eq(investments.id, investmentId), eq(investments.userId, userId)),
+    )
+    .limit(1);
+
+  if (!rows[0]) throw new Error("Selected investment was not found.");
+}
+
+function parseText(value: FormDataEntryValue | null, label: string) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${label} is required.`);
+  }
+
+  return value.trim();
+}
+
+function parseOptionalText(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+
+  return value.trim();
+}
+
+function parsePositiveInteger(value: FormDataEntryValue | null, label: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function parsePositiveNumber(value: FormDataEntryValue | null, label: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive number.`);
+  }
+
+  return parsed;
+}
+
+function parseOptionalPositiveNumber(
+  value: FormDataEntryValue | null,
+  label: string,
+) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+
+  return parsePositiveNumber(value, label);
+}
+
+function parseMoneyMinor(value: FormDataEntryValue | null, label: string) {
+  const amount = parsePositiveNumber(value, label);
+  return Math.round(amount * 100);
+}
+
+function parseAllocationPercentage(value: FormDataEntryValue | null) {
+  const parsed = parsePositiveNumber(value, "Percentage");
+  const percentage = parsed > 1 ? parsed / 100 : parsed;
+
+  if (percentage <= 0 || percentage > 1) {
+    throw new Error("Percentage must be between 0 and 100.");
+  }
+
+  return percentage;
+}
+
+function parseDate(value: FormDataEntryValue | null, label: string) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${label} is required.`);
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${label} must be a valid date.`);
+  }
+
+  return date;
+}
+
+function parseTransactionType(value: FormDataEntryValue | null) {
+  if (value === "buy" || value === "sell") return value;
+
+  throw new Error("Transaction type must be buy or sell.");
+}
+
+function revalidateWorkspace() {
+  revalidatePath("/goals");
+  revalidatePath("/investments");
+  revalidatePath("/transactions");
+  revalidatePath("/allocations");
 }
 
 function projectAmountMinor(
@@ -1076,7 +1430,7 @@ function toTitleCase(value: string) {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
+export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   const session = await getSession();
 
   return (
@@ -1176,6 +1530,7 @@ function WorkspaceHeader({
         </p>
       </div>
       <ResourceDialog
+        action={sectionActions[section.key]}
         actionLabel={section.actionLabel}
         fieldOptions={fieldOptions}
         fields={section.fields}

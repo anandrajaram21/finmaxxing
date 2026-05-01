@@ -9,6 +9,7 @@ type Field = {
   label: string;
   name: string;
   placeholder: string;
+  required?: boolean;
   type?: string;
 };
 
@@ -19,12 +20,14 @@ type FieldOption = {
 
 type ResourceDialogProps = {
   actionLabel: string;
+  action?: (formData: FormData) => void | Promise<void>;
   fields: Field[];
   fieldOptions?: Partial<Record<string, FieldOption[]>>;
   label: string;
 };
 
 export function ResourceDialog({
+  action,
   actionLabel,
   fields,
   fieldOptions,
@@ -74,7 +77,7 @@ export function ResourceDialog({
               </Button>
             </div>
 
-            <form className="grid gap-4 overflow-auto p-4">
+            <form action={action} className="grid gap-4 overflow-auto p-4">
               {fields.map((field) => {
                 const options = fieldOptions?.[field.name];
 
@@ -88,6 +91,7 @@ export function ResourceDialog({
                           defaultValue=""
                           disabled={options.length === 0}
                           name={field.name}
+                          required={field.required !== false}
                         >
                           <option value="" disabled>
                             {options.length > 0
@@ -110,6 +114,7 @@ export function ResourceDialog({
                         className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
                         name={field.name}
                         placeholder={field.placeholder}
+                        required={field.required !== false}
                         type={field.type ?? "text"}
                       />
                     )}
@@ -125,7 +130,7 @@ export function ResourceDialog({
                 >
                   Cancel
                 </Button>
-                <Button type="button">
+                <Button disabled={!action} type="submit">
                   <PlusIcon className="size-4" weight="bold" />
                   {actionLabel}
                 </Button>
