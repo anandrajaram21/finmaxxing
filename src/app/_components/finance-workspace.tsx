@@ -2,14 +2,15 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ArrowsSplit,
-  ChartLineUp,
-  CurrencyInr,
-  Plus,
-  Receipt,
-  SignOut,
-  Target,
+  ArrowsSplitIcon,
+  ChartLineUpIcon,
+  CurrencyInrIcon,
+  PlusIcon,
+  ReceiptIcon,
+  SignOutIcon,
+  TargetIcon,
 } from "@phosphor-icons/react/ssr";
+import type { Icon } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import { auth } from "@/server/better-auth";
@@ -49,7 +50,7 @@ type Section = {
   eyebrow: string;
   title: string;
   description: string;
-  icon: typeof Target;
+  icon: Icon;
   actionLabel: string;
   stats: Stat[];
   fields: Field[];
@@ -66,7 +67,7 @@ const sections: Record<SectionKey, Section> = {
     title: "Goals",
     description:
       "Define target amounts, target years, and ordering for every financial goal.",
-    icon: Target,
+    icon: TargetIcon,
     actionLabel: "Add goal",
     stats: [
       { label: "Active goals", value: "4", detail: "Ordered by priority" },
@@ -119,7 +120,7 @@ const sections: Record<SectionKey, Section> = {
     title: "Investments",
     description:
       "Maintain each instrument, ticker, category, SIP amount, and current NAV.",
-    icon: ChartLineUp,
+    icon: ChartLineUpIcon,
     actionLabel: "Add investment",
     stats: [
       { label: "Instruments", value: "8", detail: "Active holdings" },
@@ -181,7 +182,7 @@ const sections: Record<SectionKey, Section> = {
     title: "Transactions",
     description:
       "Record buy and sell activity with amount, units, NAV, notes, and date.",
-    icon: Receipt,
+    icon: ReceiptIcon,
     actionLabel: "Add transaction",
     stats: [
       { label: "This month", value: "9", detail: "Ledger entries" },
@@ -253,7 +254,7 @@ const sections: Record<SectionKey, Section> = {
     title: "Allocations",
     description:
       "Map investments to goals with percentages between 0 and 100 percent.",
-    icon: ArrowsSplit,
+    icon: ArrowsSplitIcon,
     actionLabel: "Add allocation",
     stats: [
       {
@@ -328,7 +329,7 @@ async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
       <div className="flex items-center justify-between gap-3 border-b px-4 py-4 lg:block">
         <Link href="/goals" className="flex items-center gap-3">
           <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
-            <CurrencyInr className="size-5" weight="bold" />
+            <CurrencyInrIcon className="size-5" weight="bold" />
           </span>
           <span>
             <span className="block text-sm font-semibold tracking-wide">
@@ -414,7 +415,7 @@ function WorkspaceHeader({ section }: { section: Section }) {
         </p>
       </div>
       <Button className="w-fit" type="button">
-        <Plus className="size-4" weight="bold" />
+        <PlusIcon className="size-4" weight="bold" />
         {section.actionLabel}
       </Button>
     </header>
@@ -465,7 +466,7 @@ function DefinitionForm({ section }: { section: Section }) {
             Clear
           </Button>
           <Button type="button">
-            <Plus className="size-4" weight="bold" />
+            <PlusIcon className="size-4" weight="bold" />
             {section.actionLabel}
           </Button>
         </div>
@@ -551,7 +552,7 @@ function AuthAction({ signedIn }: { signedIn: boolean }) {
           }}
           variant="outline"
         >
-          <SignOut className="size-4" />
+          <SignOutIcon className="size-4" />
           Sign out
         </Button>
       </form>
