@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ArrowsSplitIcon,
+  CaretDownIcon,
   ChartLineUpIcon,
   CurrencyInrIcon,
   PlusIcon,
@@ -26,6 +27,15 @@ type Field = {
   placeholder: string;
   type?: string;
 };
+
+type FieldOption = {
+  label: string;
+  value: string;
+};
+
+type FieldOptions = Partial<
+  Record<SectionKey, Partial<Record<string, FieldOption[]>>>
+>;
 
 type TableColumn = {
   label: string;
@@ -71,7 +81,11 @@ const sections: Record<SectionKey, Section> = {
     actionLabel: "Add goal",
     stats: [
       { label: "Active goals", value: "4", detail: "Ordered by priority" },
-      { label: "Target value", value: "INR 1.86Cr", detail: "Minor units in DB" },
+      {
+        label: "Target value",
+        value: "INR 1.86Cr",
+        detail: "Minor units in DB",
+      },
       {
         label: "Next milestone",
         value: "2028",
@@ -106,7 +120,10 @@ const sections: Record<SectionKey, Section> = {
       { label: "Order", align: "right" },
     ],
     rows: [
-      { cells: ["Retirement corpus", "INR 1.20Cr", "2045", "1"], tone: "accent" },
+      {
+        cells: ["Retirement corpus", "INR 1.20Cr", "2045", "1"],
+        tone: "accent",
+      },
       { cells: ["Home down payment", "INR 35L", "2030", "2"] },
       { cells: ["Emergency reserve", "INR 12L", "2027", "3"] },
       { cells: ["Travel fund", "INR 6L", "2028", "4"], tone: "muted" },
@@ -167,9 +184,17 @@ const sections: Record<SectionKey, Section> = {
         ],
         tone: "accent",
       },
-      { cells: ["Flexi Cap Fund", "FLEXCAP", "Equity fund", "INR 30k", "92.31"] },
       {
-        cells: ["Short Duration Debt", "SDFUND", "Debt fund", "INR 12k", "41.88"],
+        cells: ["Flexi Cap Fund", "FLEXCAP", "Equity fund", "INR 30k", "92.31"],
+      },
+      {
+        cells: [
+          "Short Duration Debt",
+          "SDFUND",
+          "Debt fund",
+          "INR 12k",
+          "41.88",
+        ],
       },
       { cells: ["Gold ETF", "GOLDBEES", "Commodity", "INR 15k", "63.44"] },
     ],
@@ -242,8 +267,12 @@ const sections: Record<SectionKey, Section> = {
           "92.41",
         ],
       },
-      { cells: ["2026-04-15", "Gold ETF", "Buy", "INR 15k", "236.44", "63.44"] },
-      { cells: ["2026-04-01", "Debt Fund", "Buy", "INR 12k", "286.53", "41.88"] },
+      {
+        cells: ["2026-04-15", "Gold ETF", "Buy", "INR 15k", "236.44", "63.44"],
+      },
+      {
+        cells: ["2026-04-01", "Debt Fund", "Buy", "INR 12k", "286.53", "41.88"],
+      },
     ],
   },
   allocations: {
@@ -299,8 +328,15 @@ const sections: Record<SectionKey, Section> = {
 
 const navItems = Object.values(sections);
 
-export function FinanceWorkspace({ sectionKey }: { sectionKey: SectionKey }) {
+export function FinanceWorkspace({
+  fieldOptions,
+  sectionKey,
+}: {
+  fieldOptions?: FieldOptions;
+  sectionKey: SectionKey;
+}) {
   const section = sections[sectionKey];
+  const sectionFieldOptions = fieldOptions?.[sectionKey];
 
   return (
     <main className="bg-background text-foreground h-screen overflow-hidden">
@@ -311,7 +347,10 @@ export function FinanceWorkspace({ sectionKey }: { sectionKey: SectionKey }) {
           <section className="min-h-0 flex-1 space-y-6 overflow-auto px-4 py-5 sm:px-6 lg:px-10">
             <StatsGrid stats={section.stats} />
             <div className="grid gap-6 xl:grid-cols-[minmax(320px,380px)_1fr]">
-              <DefinitionForm section={section} />
+              <DefinitionForm
+                fieldOptions={sectionFieldOptions}
+                section={section}
+              />
               <ResourceTable section={section} />
             </div>
           </section>
@@ -441,7 +480,13 @@ function StatsGrid({ stats }: { stats: Stat[] }) {
   );
 }
 
-function DefinitionForm({ section }: { section: Section }) {
+function DefinitionForm({
+  fieldOptions,
+  section,
+}: {
+  fieldOptions?: Partial<Record<string, FieldOption[]>>;
+  section: Section;
+}) {
   return (
     <section className="border-border bg-card text-card-foreground border">
       <div className="border-b px-4 py-3">
@@ -450,17 +495,47 @@ function DefinitionForm({ section }: { section: Section }) {
         </h2>
       </div>
       <form className="grid gap-4 p-4">
-        {section.fields.map((field) => (
-          <label key={field.name} className="grid gap-1.5">
-            <span className="text-xs font-medium">{field.label}</span>
-            <input
-              className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
-              name={field.name}
-              placeholder={field.placeholder}
-              type={field.type ?? "text"}
-            />
-          </label>
-        ))}
+        {section.fields.map((field) => {
+          const options = fieldOptions?.[field.name];
+
+          return (
+            <label key={field.name} className="grid gap-1.5">
+              <span className="text-xs font-medium">{field.label}</span>
+              {options ? (
+                <span className="relative block">
+                  <select
+                    className="border-input bg-background focus-visible:ring-ring h-9 w-full appearance-none rounded-sm border px-3 pr-10 text-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    defaultValue=""
+                    disabled={options.length === 0}
+                    name={field.name}
+                  >
+                    <option value="" disabled>
+                      {options.length > 0
+                        ? `Select ${field.label.toLowerCase()}`
+                        : `No ${field.label.toLowerCase()}s found`}
+                    </option>
+                    {options.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <CaretDownIcon
+                    aria-hidden="true"
+                    className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
+                  />
+                </span>
+              ) : (
+                <input
+                  className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
+                  name={field.name}
+                  placeholder={field.placeholder}
+                  type={field.type ?? "text"}
+                />
+              )}
+            </label>
+          );
+        })}
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button type="reset" variant="outline">
             Clear
