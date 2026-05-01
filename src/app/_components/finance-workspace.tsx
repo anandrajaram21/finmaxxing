@@ -3,10 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ArrowsSplitIcon,
-  CaretDownIcon,
   ChartLineUpIcon,
   CurrencyInrIcon,
-  PlusIcon,
   ReceiptIcon,
   SignOutIcon,
   TargetIcon,
@@ -18,6 +16,7 @@ import { auth } from "@/server/better-auth";
 import { getSession } from "@/server/better-auth/server";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+import { ResourceDialog } from "./resource-dialog";
 
 type SectionKey = "goals" | "investments" | "transactions" | "allocations";
 
@@ -82,14 +81,14 @@ const sections: Record<SectionKey, Section> = {
     stats: [
       { label: "Active goals", value: "4", detail: "Ordered by priority" },
       {
-        label: "Target value",
-        value: "INR 1.86Cr",
-        detail: "Minor units in DB",
+        label: "Projected need",
+        value: "INR 4.27Cr",
+        detail: "6% inflation from 2026",
       },
       {
-        label: "Next milestone",
-        value: "2028",
-        detail: "Earliest target year",
+        label: "Monthly investing",
+        value: "INR 61k",
+        detail: "Static allocated SIP",
       },
     ],
     fields: [
@@ -115,18 +114,55 @@ const sections: Record<SectionKey, Section> = {
     ],
     tableColumns: [
       { label: "Goal" },
-      { label: "Target", align: "right" },
+      { label: "Goal amount", align: "right" },
+      { label: "Projected need", align: "right" },
+      { label: "SIP needed", align: "right" },
+      { label: "Actual SIP", align: "right" },
       { label: "Year", align: "center" },
-      { label: "Order", align: "right" },
     ],
     rows: [
       {
-        cells: ["Retirement corpus", "INR 1.20Cr", "2045", "1"],
+        cells: [
+          "Retirement corpus",
+          "INR 1.20Cr",
+          "INR 3.63Cr",
+          "INR 56.8k",
+          "INR 41.5k",
+          "2045",
+        ],
         tone: "accent",
       },
-      { cells: ["Home down payment", "INR 35L", "2030", "2"] },
-      { cells: ["Emergency reserve", "INR 12L", "2027", "3"] },
-      { cells: ["Travel fund", "INR 6L", "2028", "4"], tone: "muted" },
+      {
+        cells: [
+          "Home down payment",
+          "INR 35L",
+          "INR 44.2L",
+          "INR 75.9k",
+          "INR 7.5k",
+          "2030",
+        ],
+      },
+      {
+        cells: [
+          "Emergency reserve",
+          "INR 12L",
+          "INR 12.7L",
+          "INR 1.02L",
+          "INR 12k",
+          "2027",
+        ],
+      },
+      {
+        cells: [
+          "Travel fund",
+          "INR 6L",
+          "INR 6.74L",
+          "INR 25.7k",
+          "INR 0",
+          "2028",
+        ],
+        tone: "muted",
+      },
     ],
   },
   investments: {
@@ -343,16 +379,13 @@ export function FinanceWorkspace({
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey={sectionKey} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <WorkspaceHeader section={section} />
+          <WorkspaceHeader
+            fieldOptions={sectionFieldOptions}
+            section={section}
+          />
           <section className="min-h-0 flex-1 space-y-6 overflow-auto px-4 py-5 sm:px-6 lg:px-10">
             <StatsGrid stats={section.stats} />
-            <div className="grid gap-6 xl:grid-cols-[minmax(320px,380px)_1fr]">
-              <DefinitionForm
-                fieldOptions={sectionFieldOptions}
-                section={section}
-              />
-              <ResourceTable section={section} />
-            </div>
+            <ResourceTable section={section} />
           </section>
         </div>
       </div>
@@ -436,7 +469,13 @@ async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   );
 }
 
-function WorkspaceHeader({ section }: { section: Section }) {
+function WorkspaceHeader({
+  fieldOptions,
+  section,
+}: {
+  fieldOptions?: Partial<Record<string, FieldOption[]>>;
+  section: Section;
+}) {
   const Icon = section.icon;
 
   return (
@@ -453,10 +492,12 @@ function WorkspaceHeader({ section }: { section: Section }) {
           {section.description}
         </p>
       </div>
-      <Button className="w-fit" type="button">
-        <PlusIcon className="size-4" weight="bold" />
-        {section.actionLabel}
-      </Button>
+      <ResourceDialog
+        actionLabel={section.actionLabel}
+        fieldOptions={fieldOptions}
+        fields={section.fields}
+        label={section.label}
+      />
     </header>
   );
 }
@@ -480,76 +521,6 @@ function StatsGrid({ stats }: { stats: Stat[] }) {
   );
 }
 
-function DefinitionForm({
-  fieldOptions,
-  section,
-}: {
-  fieldOptions?: Partial<Record<string, FieldOption[]>>;
-  section: Section;
-}) {
-  return (
-    <section className="border-border bg-card text-card-foreground border">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">
-          Define {section.label.slice(0, -1)}
-        </h2>
-      </div>
-      <form className="grid gap-4 p-4">
-        {section.fields.map((field) => {
-          const options = fieldOptions?.[field.name];
-
-          return (
-            <label key={field.name} className="grid gap-1.5">
-              <span className="text-xs font-medium">{field.label}</span>
-              {options ? (
-                <span className="relative block">
-                  <select
-                    className="border-input bg-background focus-visible:ring-ring h-9 w-full appearance-none rounded-sm border px-3 pr-10 text-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
-                    defaultValue=""
-                    disabled={options.length === 0}
-                    name={field.name}
-                  >
-                    <option value="" disabled>
-                      {options.length > 0
-                        ? `Select ${field.label.toLowerCase()}`
-                        : `No ${field.label.toLowerCase()}s found`}
-                    </option>
-                    {options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <CaretDownIcon
-                    aria-hidden="true"
-                    className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
-                  />
-                </span>
-              ) : (
-                <input
-                  className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
-                  name={field.name}
-                  placeholder={field.placeholder}
-                  type={field.type ?? "text"}
-                />
-              )}
-            </label>
-          );
-        })}
-        <div className="flex items-center justify-end gap-2 pt-2">
-          <Button type="reset" variant="outline">
-            Clear
-          </Button>
-          <Button type="button">
-            <PlusIcon className="size-4" weight="bold" />
-            {section.actionLabel}
-          </Button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
 function ResourceTable({ section }: { section: Section }) {
   return (
     <section className="border-border bg-card text-card-foreground min-w-0 border">
@@ -560,7 +531,7 @@ function ResourceTable({ section }: { section: Section }) {
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] border-collapse text-sm">
+        <table className="w-full min-w-[860px] border-collapse text-sm">
           <thead>
             <tr className="bg-muted/50 text-muted-foreground border-b text-xs">
               {section.tableColumns.map((column) => (
