@@ -30,7 +30,7 @@ import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
 import { ThemeToggle } from "./theme-toggle";
 import { ResourceDialog } from "./resource-dialog";
-import { ResourceTable } from "./resource-table";
+import { ResourceTable, type TableRowAction } from "./resource-table";
 
 export type SectionKey =
   | "goals"
@@ -64,6 +64,7 @@ type TableColumn = {
 };
 
 type TableRow = {
+  action?: TableRowAction;
   cells: string[];
   details?: {
     label: string;
@@ -943,6 +944,15 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
           },
         ],
         rows: projectedGoalRows.map((goal, index) => ({
+          action: {
+            id: goal.id,
+            kind: "goal",
+            values: {
+              name: goal.name,
+              targetAmountMinor: goal.targetAmountMinor,
+              targetYear: goal.targetYear,
+            },
+          },
           cells: [
             goal.name,
             formatInrMinor(goal.targetAmountMinor),
@@ -1063,6 +1073,15 @@ function getInvestmentRow(
   const xirr = investmentReturn?.xirr ?? null;
 
   return {
+    action: {
+      id: investment.id,
+      kind: "investment",
+      values: {
+        monthlySipMinor: investment.monthlySipMinor,
+        name: investment.name,
+        tickerSymbol: investment.tickerSymbol,
+      },
+    },
     cells: [
       investment.name,
       formatInrMinor(currentValueMinor),
