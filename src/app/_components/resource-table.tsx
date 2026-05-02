@@ -24,7 +24,29 @@ type TableRowDetail = {
   value: string;
 };
 
+type ProgressCell = {
+  currentMinor: number;
+  kind: "progress";
+  totalMinor: number;
+};
+
+type SelectOption = {
+  label: string;
+  value: string;
+};
+
 export type TableRowAction =
+  | {
+      goalOptions: SelectOption[];
+      id: number;
+      investmentOptions: SelectOption[];
+      kind: "allocation";
+      values: {
+        goalId: number;
+        investmentId: number;
+        percentage: number;
+      };
+    }
   | {
       kind: "goal";
       id: number;
@@ -42,14 +64,30 @@ export type TableRowAction =
         name: string;
         tickerSymbol: string;
       };
+    }
+  | {
+      kind: "transaction";
+      id: number;
+      investmentOptions: SelectOption[];
+      values: {
+        amountMinor: number;
+        investmentId: number;
+        nav: number;
+        notes: string | null;
+        transactionDate: string;
+        type: "buy" | "sell";
+        units: number;
+      };
     };
 
 type TableRow = {
   action?: TableRowAction;
-  cells: string[];
+  cells: TableCell[];
   details?: TableRowDetail[];
   tone?: "normal" | "muted" | "accent";
 };
+
+type TableCell = string | ProgressCell;
 
 export function ResourceTable({
   label,
@@ -96,7 +134,7 @@ export function ResourceTable({
             {rows.map((row) => {
               const rowKey = row.action
                 ? `${row.action.kind}-${row.action.id}`
-                : row.cells.join("-");
+                : row.cells.map(cellToText).join("-");
               const isExpanded = expandedRow === rowKey;
               const canExpand = Boolean(row.details?.length);
 
@@ -151,7 +189,7 @@ function FragmentRow({
       >
         {row.cells.map((cell, index) => (
           <td
-            key={`${cell}-${index}`}
+            key={`${cellToText(cell)}-${index}`}
             className={cn(
               "px-4 py-3 align-middle",
               alignmentClass(tableColumns[index]?.align),
@@ -161,7 +199,7 @@ function FragmentRow({
               <span className="flex min-w-0 items-center gap-2">
                 <Button
                   aria-expanded={isExpanded}
-                  aria-label={`${isExpanded ? "Collapse" : "Expand"} ${cell}`}
+                  aria-label={`${isExpanded ? "Collapse" : "Expand"} ${cellToText(cell)}`}
                   disabled={!canExpand}
                   onClick={onToggle}
                   size="icon-xs"
@@ -176,10 +214,10 @@ function FragmentRow({
                     weight="bold"
                   />
                 </Button>
-                <span className="truncate">{cell}</span>
+                <span className="truncate">{renderCell(cell)}</span>
               </span>
             ) : (
-              cell
+              renderCell(cell)
             )}
           </td>
         ))}
@@ -214,9 +252,105 @@ function FragmentRow({
   );
 }
 
+function renderCell(cell: TableCell) {
+  if (typeof cell === "string") return cell;
+
+  return <ProgressCellView cell={cell} />;
+}
+
+function cellToText(cell: TableCell) {
+  if (typeof cell === "string") return cell;
+
+  return `${cell.currentMinor}-${cell.totalMinor}`;
+}
+
+function ProgressCellView({ cell }: { cell: ProgressCell }) {
+  const ratio =
+    cell.totalMinor > 0 ? Math.min(cell.currentMinor / cell.totalMinor, 1) : 0;
+  const percent = Math.round(ratio * 100);
+
+  return (
+    <div className="ml-auto grid min-w-52 gap-1 text-left">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="font-medium">{formatInrMinor(cell.currentMinor)}</span>
+        <span className="text-muted-foreground">{percent}%</span>
+      </div>
+      <div className="bg-muted h-2 overflow-hidden rounded-none">
+        <div className="bg-primary h-full" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="text-muted-foreground text-xs">
+        of {formatInrMinor(cell.totalMinor)}
+      </div>
+    </div>
+  );
+}
+
 function RowActions({ action }: { action: TableRowAction }) {
+  if (action.kind === "allocation") {
+    return <AllocationRowActions action={action} />;
+  }
   if (action.kind === "goal") return <GoalRowActions action={action} />;
-  return <InvestmentRowActions action={action} />;
+  if (action.kind === "investment") {
+    return <InvestmentRowActions action={action} />;
+  }
+  return <TransactionRowActions action={action} />;
+}
+
+function AllocationRowActions({
+  action,
+}: {
+  action: Extract<TableRowAction, { kind: "allocation" }>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const router = useRouter();
+  const utils = api.useUtils();
+  const deleteAllocation = api.allocations.delete.useMutation();
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this allocation?")) return;
+
+    try {
+      await deleteAllocation.mutateAsync({ id: action.id });
+      await utils.allocations.list.invalidate();
+      router.refresh();
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Allocation delete failed.",
+      );
+    }
+  }
+
+  return (
+    <>
+      <span className="inline-flex items-center justify-end gap-1">
+        <Button
+          aria-label="Edit allocation"
+          onClick={() => setIsEditing(true)}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <PencilSimpleIcon className="size-3" />
+        </Button>
+        <Button
+          aria-label="Delete allocation"
+          disabled={deleteAllocation.isPending}
+          onClick={handleDelete}
+          size="icon-xs"
+          type="button"
+          variant="destructive"
+        >
+          <TrashIcon className="size-3" />
+        </Button>
+      </span>
+      {isEditing ? (
+        <AllocationEditDialog
+          action={action}
+          onClose={() => setIsEditing(false)}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function GoalRowActions({
@@ -330,6 +464,63 @@ function InvestmentRowActions({
   );
 }
 
+function TransactionRowActions({
+  action,
+}: {
+  action: Extract<TableRowAction, { kind: "transaction" }>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const router = useRouter();
+  const utils = api.useUtils();
+  const deleteTransaction = api.transactions.delete.useMutation();
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this transaction?")) return;
+
+    try {
+      await deleteTransaction.mutateAsync({ id: action.id });
+      await utils.transactions.list.invalidate();
+      router.refresh();
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Transaction delete failed.",
+      );
+    }
+  }
+
+  return (
+    <>
+      <span className="inline-flex items-center justify-end gap-1">
+        <Button
+          aria-label="Edit transaction"
+          onClick={() => setIsEditing(true)}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <PencilSimpleIcon className="size-3" />
+        </Button>
+        <Button
+          aria-label="Delete transaction"
+          disabled={deleteTransaction.isPending}
+          onClick={handleDelete}
+          size="icon-xs"
+          type="button"
+          variant="destructive"
+        >
+          <TrashIcon className="size-3" />
+        </Button>
+      </span>
+      {isEditing ? (
+        <TransactionEditDialog
+          action={action}
+          onClose={() => setIsEditing(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function GoalEditDialog({
   action,
   onClose,
@@ -419,6 +610,114 @@ function GoalEditDialog({
         <EditDialogFooter
           error={formError ?? updateGoal.error?.message}
           isPending={updateGoal.isPending}
+          isValid={isValid}
+          onClose={onClose}
+        />
+      </form>
+    </EditDialogShell>
+  );
+}
+
+function AllocationEditDialog({
+  action,
+  onClose,
+}: {
+  action: Extract<TableRowAction, { kind: "allocation" }>;
+  onClose: () => void;
+}) {
+  const [investmentId, setInvestmentId] = useState(
+    String(action.values.investmentId),
+  );
+  const [goalId, setGoalId] = useState(String(action.values.goalId));
+  const [percentage, setPercentage] = useState(
+    String(action.values.percentage * 100),
+  );
+  const [formError, setFormError] = useState<string | null>(null);
+  const router = useRouter();
+  const utils = api.useUtils();
+  const updateAllocation = api.allocations.update.useMutation();
+
+  const parsedInvestmentId = parsePositiveInteger(investmentId);
+  const parsedGoalId = parsePositiveInteger(goalId);
+  const percentageValue = parseAllocationPercentage(percentage);
+  const isValid =
+    parsedInvestmentId !== null &&
+    parsedGoalId !== null &&
+    percentageValue !== null;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+
+    if (
+      !isValid ||
+      parsedInvestmentId === null ||
+      parsedGoalId === null ||
+      percentageValue === null
+    ) {
+      setFormError("Select an investment and goal, then enter a percentage.");
+      return;
+    }
+
+    try {
+      await updateAllocation.mutateAsync({
+        goalId: parsedGoalId,
+        id: action.id,
+        investmentId: parsedInvestmentId,
+        percentage: percentageValue,
+      });
+      await utils.allocations.list.invalidate();
+      router.refresh();
+      onClose();
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "Allocation update failed.",
+      );
+    }
+  }
+
+  return (
+    <EditDialogShell
+      isPending={updateAllocation.isPending}
+      onClose={onClose}
+      title="Edit allocation"
+    >
+      <form className="grid gap-4 overflow-auto p-4" onSubmit={handleSubmit}>
+        <SelectField
+          disabled={action.investmentOptions.length === 0}
+          label="Investment"
+          onChange={setInvestmentId}
+          options={action.investmentOptions}
+          placeholder={
+            action.investmentOptions.length > 0
+              ? "Select investment"
+              : "No investments found"
+          }
+          value={investmentId}
+        />
+        <SelectField
+          disabled={action.goalOptions.length === 0}
+          label="Goal"
+          onChange={setGoalId}
+          options={action.goalOptions}
+          placeholder={
+            action.goalOptions.length > 0 ? "Select goal" : "No goals found"
+          }
+          value={goalId}
+        />
+        <TextField
+          inputMode="decimal"
+          label="Percentage"
+          min="0.01"
+          onChange={setPercentage}
+          placeholder="70"
+          step="0.01"
+          type="number"
+          value={percentage}
+        />
+        <EditDialogFooter
+          error={formError ?? updateAllocation.error?.message}
+          isPending={updateAllocation.isPending}
           isValid={isValid}
           onClose={onClose}
         />
@@ -519,6 +818,173 @@ function InvestmentEditDialog({
   );
 }
 
+function TransactionEditDialog({
+  action,
+  onClose,
+}: {
+  action: Extract<TableRowAction, { kind: "transaction" }>;
+  onClose: () => void;
+}) {
+  const [investmentId, setInvestmentId] = useState(
+    String(action.values.investmentId),
+  );
+  const [transactionDate, setTransactionDate] = useState(
+    action.values.transactionDate,
+  );
+  const [type, setType] = useState<"buy" | "sell">(action.values.type);
+  const [amount, setAmount] = useState(String(action.values.amountMinor / 100));
+  const [units, setUnits] = useState(String(action.values.units));
+  const [nav, setNav] = useState(String(action.values.nav));
+  const [notes, setNotes] = useState(action.values.notes ?? "");
+  const [formError, setFormError] = useState<string | null>(null);
+  const router = useRouter();
+  const utils = api.useUtils();
+  const updateTransaction = api.transactions.update.useMutation();
+
+  const parsedInvestmentId = parsePositiveInteger(investmentId);
+  const parsedDate = parseDateInput(transactionDate);
+  const amountMinor = parseMoneyMinor(amount, true);
+  const unitsValue = parsePositiveNumber(units);
+  const navValue = parsePositiveNumber(nav);
+  const isValid =
+    parsedInvestmentId !== null &&
+    parsedDate !== null &&
+    amountMinor !== null &&
+    unitsValue !== null &&
+    navValue !== null;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+
+    if (
+      !isValid ||
+      parsedInvestmentId === null ||
+      parsedDate === null ||
+      amountMinor === null ||
+      unitsValue === null ||
+      navValue === null
+    ) {
+      setFormError("Enter investment, date, amount, units, and NAV.");
+      return;
+    }
+
+    try {
+      await updateTransaction.mutateAsync({
+        amountMinor,
+        id: action.id,
+        investmentId: parsedInvestmentId,
+        nav: navValue,
+        notes: notes.trim() || null,
+        transactionDate: parsedDate,
+        type,
+        units: unitsValue,
+      });
+      await utils.transactions.list.invalidate();
+      router.refresh();
+      onClose();
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "Transaction update failed.",
+      );
+    }
+  }
+
+  return (
+    <EditDialogShell
+      isPending={updateTransaction.isPending}
+      onClose={onClose}
+      title="Edit transaction"
+    >
+      <form className="grid gap-4 overflow-auto p-4" onSubmit={handleSubmit}>
+        <SelectField
+          disabled={action.investmentOptions.length === 0}
+          label="Investment"
+          onChange={setInvestmentId}
+          options={action.investmentOptions}
+          placeholder={
+            action.investmentOptions.length > 0
+              ? "Select investment"
+              : "No investments found"
+          }
+          value={investmentId}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Date"
+            onChange={setTransactionDate}
+            placeholder="2026-05-01"
+            type="date"
+            value={transactionDate}
+          />
+          <SelectField
+            label="Type"
+            onChange={(value) => setType(value === "sell" ? "sell" : "buy")}
+            options={[
+              { label: "Buy", value: "buy" },
+              { label: "Sell", value: "sell" },
+            ]}
+            placeholder="Select type"
+            value={type}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <TextField
+            inputMode="decimal"
+            label="Amount"
+            min="0.01"
+            onChange={setAmount}
+            placeholder="25000"
+            step="0.01"
+            type="number"
+            value={amount}
+          />
+          <TextField
+            inputMode="decimal"
+            label="Units"
+            min="0.000001"
+            onChange={setUnits}
+            placeholder="100.596"
+            step="0.000001"
+            type="number"
+            value={units}
+          />
+          <TextField
+            inputMode="decimal"
+            label="NAV"
+            min="0.0001"
+            onChange={setNav}
+            placeholder="248.52"
+            step="0.0001"
+            type="number"
+            value={nav}
+          />
+        </div>
+
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium">Notes</span>
+          <textarea
+            className="border-input bg-background focus-visible:ring-ring min-h-20 w-full resize-none rounded-sm border px-3 py-2 text-sm outline-none focus-visible:ring-1"
+            maxLength={1024}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Monthly SIP"
+            value={notes}
+          />
+        </label>
+
+        <EditDialogFooter
+          error={formError ?? updateTransaction.error?.message}
+          isPending={updateTransaction.isPending}
+          isValid={isValid}
+          onClose={onClose}
+        />
+      </form>
+    </EditDialogShell>
+  );
+}
+
 function EditDialogShell({
   children,
   isPending,
@@ -596,6 +1062,44 @@ function TextField({
   );
 }
 
+function SelectField({
+  disabled,
+  label,
+  onChange,
+  options,
+  placeholder,
+  value,
+}: {
+  disabled?: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs font-medium">{label}</span>
+      <select
+        className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        required
+        value={value}
+      >
+        <option value="" disabled>
+          {placeholder}
+        </option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function EditDialogFooter({
   error,
   isPending,
@@ -637,6 +1141,15 @@ function parseMoneyMinor(value: string, positive: boolean) {
   return Math.round(parsed * 100);
 }
 
+function parsePositiveNumber(value: string) {
+  if (value.trim() === "") return null;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  return parsed;
+}
+
 function parsePositiveInteger(value: string) {
   if (value.trim() === "") return null;
 
@@ -644,6 +1157,47 @@ function parsePositiveInteger(value: string) {
   if (!Number.isInteger(parsed) || parsed <= 0) return null;
 
   return parsed;
+}
+
+function parseAllocationPercentage(value: string) {
+  if (value.trim() === "") return null;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  const percentage = parsed > 1 ? parsed / 100 : parsed;
+  if (percentage <= 0 || percentage > 1) return null;
+
+  return percentage;
+}
+
+function parseDateInput(value: string) {
+  if (value.trim() === "") return null;
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+}
+
+function formatInrMinor(amountMinor: number) {
+  const amount = amountMinor / 100;
+
+  if (amount >= 10_000_000)
+    return `INR ${formatCompact(amount / 10_000_000)}Cr`;
+  if (amount >= 100_000) return `INR ${formatCompact(amount / 100_000)}L`;
+  if (amount >= 1_000) return `INR ${formatCompact(amount / 1_000)}k`;
+
+  return `INR ${amount.toLocaleString("en-IN", {
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function formatCompact(value: number) {
+  return value.toLocaleString("en-IN", {
+    maximumFractionDigits: value >= 10 ? 1 : 2,
+    minimumFractionDigits: 0,
+  });
 }
 
 function alignmentClass(align: TableColumn["align"]) {

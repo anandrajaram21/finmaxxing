@@ -26,9 +26,11 @@ import {
   transactions,
 } from "@/server/db/schema";
 import { cn } from "@/lib/utils";
+import { AllocationCreateDialog } from "./allocation-create-dialog";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
 import { ThemeToggle } from "./theme-toggle";
+import { TransactionCreateDialog } from "./transaction-create-dialog";
 import { ResourceDialog } from "./resource-dialog";
 import { ResourceTable, type TableRowAction } from "./resource-table";
 
@@ -63,9 +65,17 @@ type TableColumn = {
   align?: "left" | "right" | "center";
 };
 
+type TableCell =
+  | string
+  | {
+      currentMinor: number;
+      kind: "progress";
+      totalMinor: number;
+    };
+
 type TableRow = {
   action?: TableRowAction;
-  cells: string[];
+  cells: TableCell[];
   details?: {
     label: string;
     value: string;
@@ -148,53 +158,38 @@ const sections: Record<SectionKey, Section> = {
       },
     ],
     tableColumns: [
-      { label: "Goal" },
-      { label: "Goal amount", align: "right" },
-      { label: "Projected need", align: "right" },
-      { label: "SIP needed", align: "right" },
-      { label: "Actual SIP", align: "right" },
-      { label: "Year", align: "center" },
+      { label: "Goal name" },
+      { label: "Amount needed", align: "right" },
+      { label: "Amount saved", align: "right" },
     ],
     rows: [
       {
         cells: [
           "Retirement corpus",
-          "INR 1.20Cr",
           "INR 3.63Cr",
-          "INR 56.8k",
-          "INR 41.5k",
-          "2045",
+          { currentMinor: 9250000, kind: "progress", totalMinor: 36300000 },
         ],
         tone: "accent",
       },
       {
         cells: [
           "Home down payment",
-          "INR 35L",
           "INR 44.2L",
-          "INR 75.9k",
-          "INR 7.5k",
-          "2030",
+          { currentMinor: 820000, kind: "progress", totalMinor: 4420000 },
         ],
       },
       {
         cells: [
           "Emergency reserve",
-          "INR 12L",
           "INR 12.7L",
-          "INR 1.02L",
-          "INR 12k",
-          "2027",
+          { currentMinor: 510000, kind: "progress", totalMinor: 1270000 },
         ],
       },
       {
         cells: [
           "Travel fund",
-          "INR 6L",
           "INR 6.74L",
-          "INR 25.7k",
-          "INR 0",
-          "2028",
+          { currentMinor: 0, kind: "progress", totalMinor: 674000 },
         ],
         tone: "muted",
       },
@@ -652,6 +647,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
         .select({
           goalId: goals.id,
           goalName: goals.name,
+          id: allocations.id,
           investmentId: investments.id,
           investmentName: investments.name,
           monthlySipMinor: investments.monthlySipMinor,
@@ -665,9 +661,11 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
       db
         .select({
           amountMinor: transactions.amountMinor,
-          investmentId: investments.id,
+          id: transactions.id,
+          investmentId: transactions.investmentId,
           investmentName: investments.name,
           nav: transactions.nav,
+          notes: transactions.notes,
           transactionDate: transactions.transactionDate,
           type: transactions.type,
           units: transactions.units,
@@ -813,6 +811,18 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     });
   }
 
+  const savedByGoal = new Map<number, number>();
+  for (const allocation of allocationRows) {
+    const currentValueMinor =
+      investmentReturns.get(allocation.investmentId)?.currentValueMinor ?? 0;
+
+    savedByGoal.set(
+      allocation.goalId,
+      (savedByGoal.get(allocation.goalId) ?? 0) +
+        Math.round(currentValueMinor * allocation.percentage),
+    );
+  }
+
   const portfolioCashFlows = [
     ...txRows.map((transaction) => ({
       amount:
@@ -914,6 +924,17 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
           },
         ],
         rows: allocationRows.map((allocation, index) => ({
+          action: {
+            goalOptions,
+            id: allocation.id,
+            investmentOptions,
+            kind: "allocation",
+            values: {
+              goalId: allocation.goalId,
+              investmentId: allocation.investmentId,
+              percentage: allocation.percentage,
+            },
+          },
           cells: [
             allocation.investmentName,
             allocation.goalName,
@@ -943,31 +964,47 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
             value: formatInrMinor(totalMonthlySipMinor),
           },
         ],
-        rows: projectedGoalRows.map((goal, index) => ({
-          action: {
-            id: goal.id,
-            kind: "goal",
-            values: {
-              name: goal.name,
-              targetAmountMinor: goal.targetAmountMinor,
-              targetYear: goal.targetYear,
+        rows: projectedGoalRows.map((goal, index) => {
+          const savedMinor = savedByGoal.get(goal.id) ?? 0;
+
+          return {
+            action: {
+              id: goal.id,
+              kind: "goal",
+              values: {
+                name: goal.name,
+                targetAmountMinor: goal.targetAmountMinor,
+                targetYear: goal.targetYear,
+              },
             },
-          },
-          cells: [
-            goal.name,
-            formatInrMinor(goal.targetAmountMinor),
-            formatInrMinor(goal.projectedNeedMinor),
-            formatInrMinor(goal.sipNeededMinor),
-            formatInrMinor(goal.actualSipMinor),
-            String(goal.targetYear),
-          ],
-          tone:
-            index === 0
-              ? "accent"
-              : goal.actualSipMinor === 0
-                ? "muted"
-                : "normal",
-        })),
+            cells: [
+              goal.name,
+              formatInrMinor(goal.projectedNeedMinor),
+              {
+                currentMinor: savedMinor,
+                kind: "progress",
+                totalMinor: goal.projectedNeedMinor,
+              },
+            ],
+            details: [
+              {
+                label: "Goal amount",
+                value: formatInrMinor(goal.targetAmountMinor),
+              },
+              {
+                label: "SIP needed",
+                value: formatInrMinor(goal.sipNeededMinor),
+              },
+              {
+                label: "Allocated monthly SIP",
+                value: formatInrMinor(goal.actualSipMinor),
+              },
+              { label: "Target year", value: String(goal.targetYear) },
+            ],
+            tone:
+              index === 0 ? "accent" : savedMinor === 0 ? "muted" : "normal",
+          };
+        }),
       },
       investments: {
         stats: [
@@ -1017,17 +1054,35 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
             value: weightedAverageNav > 0 ? weightedAverageNav.toFixed(1) : "0",
           },
         ],
-        rows: txRows.map((transaction, index) => ({
-          cells: [
-            formatDate(toDate(transaction.transactionDate)),
-            transaction.investmentName,
-            toTitleCase(transaction.type),
-            formatInrMinor(transaction.amountMinor),
-            transaction.units.toFixed(3),
-            transaction.nav.toFixed(2),
-          ],
-          tone: index === 0 ? "accent" : "normal",
-        })),
+        rows: txRows.map((transaction, index) => {
+          const transactionDate = toDate(transaction.transactionDate);
+
+          return {
+            action: {
+              id: transaction.id,
+              investmentOptions,
+              kind: "transaction",
+              values: {
+                amountMinor: transaction.amountMinor,
+                investmentId: transaction.investmentId,
+                nav: transaction.nav,
+                notes: transaction.notes,
+                transactionDate: formatDate(transactionDate),
+                type: transaction.type,
+                units: transaction.units,
+              },
+            },
+            cells: [
+              formatDate(transactionDate),
+              transaction.investmentName,
+              toTitleCase(transaction.type),
+              formatInrMinor(transaction.amountMinor),
+              transaction.units.toFixed(3),
+              transaction.nav.toFixed(2),
+            ],
+            tone: index === 0 ? "accent" : "normal",
+          };
+        }),
       },
       assumptions: {
         stats: [
@@ -1499,6 +1554,19 @@ function WorkspaceHeader({
       ) : section.key === "investments" ? (
         <InvestmentCreateDialog
           actionLabel={section.actionLabel}
+          label={section.label}
+        />
+      ) : section.key === "transactions" ? (
+        <TransactionCreateDialog
+          actionLabel={section.actionLabel}
+          investmentOptions={fieldOptions?.investmentId ?? []}
+          label={section.label}
+        />
+      ) : section.key === "allocations" ? (
+        <AllocationCreateDialog
+          actionLabel={section.actionLabel}
+          goalOptions={fieldOptions?.goalId ?? []}
+          investmentOptions={fieldOptions?.investmentId ?? []}
           label={section.label}
         />
       ) : (

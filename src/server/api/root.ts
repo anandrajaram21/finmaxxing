@@ -3,12 +3,16 @@ import {
   createTRPCRouter,
   publicProcedure,
 } from "@/server/api/trpc";
+import { allocationsRouter } from "@/server/api/routers/allocations";
 import { goalsRouter } from "@/server/api/routers/goals";
 import { investmentsRouter } from "@/server/api/routers/investments";
+import { transactionsRouter } from "@/server/api/routers/transactions";
 
 export const appRouter = createTRPCRouter({
+  allocations: allocationsRouter,
   goals: goalsRouter,
   investments: investmentsRouter,
+  transactions: transactionsRouter,
   health: publicProcedure.query(() => ({ ok: true })),
 });
 
