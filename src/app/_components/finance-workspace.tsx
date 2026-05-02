@@ -27,6 +27,7 @@ import {
 } from "@/server/db/schema";
 import { cn } from "@/lib/utils";
 import { GoalCreateDialog } from "./goal-create-dialog";
+import { InvestmentCreateDialog } from "./investment-create-dialog";
 import { ThemeToggle } from "./theme-toggle";
 import { ResourceDialog } from "./resource-dialog";
 import { ResourceTable } from "./resource-table";
@@ -205,7 +206,7 @@ const sections: Record<SectionKey, Section> = {
     eyebrow: "Portfolio",
     title: "Investments",
     description:
-      "Maintain each instrument, ticker, category, SIP amount, and current NAV.",
+      "Maintain each instrument, ticker symbol, and recurring SIP amount.",
     icon: ChartLineUpIcon,
     actionLabel: "Add investment",
     stats: [
@@ -214,72 +215,36 @@ const sections: Record<SectionKey, Section> = {
       { label: "NAV freshness", value: "2d", detail: "Latest update age" },
     ],
     fields: [
-      { label: "Investment name", name: "name", placeholder: "Nifty 50 Index" },
+      {
+        label: "Mutual fund / stock / ETF name",
+        name: "name",
+        placeholder: "Nifty 50 Index",
+      },
       {
         label: "Ticker symbol",
         name: "tickerSymbol",
         placeholder: "NIFTYBEES",
       },
       {
-        label: "ISIN",
-        name: "isin",
-        placeholder: "INF204KB16I7",
-        required: false,
-      },
-      {
-        label: "Category",
-        name: "category",
-        placeholder: "Equity index",
-        required: false,
-      },
-      {
-        label: "Monthly SIP",
+        label: "SIP amount",
         name: "monthlySipMinor",
         placeholder: "25000",
         type: "number",
       },
-      {
-        label: "Current NAV",
-        name: "currentNav",
-        placeholder: "248.52",
-        required: false,
-        type: "number",
-      },
     ],
     tableColumns: [
-      { label: "Mutual fund / stock / ETF name" },
-      { label: "Ticker symbol", align: "center" },
-      { label: "Avg NAV", align: "right" },
-      { label: "Current NAV", align: "right" },
-      { label: "Units", align: "right" },
+      { label: "Fund name" },
       { label: "Current value", align: "right" },
       { label: "XIRR", align: "right" },
-      { label: "SIP amount", align: "right" },
     ],
     rows: [
       {
-        cells: [
-          "Nifty 50 Index",
-          "NIFTYBEES",
-          "Equity index",
-          "INR 25k",
-          "248.52",
-        ],
+        cells: ["Nifty 50 Index", "INR 2.5L", "12.4%"],
         tone: "accent",
       },
-      {
-        cells: ["Flexi Cap Fund", "FLEXCAP", "Equity fund", "INR 30k", "92.31"],
-      },
-      {
-        cells: [
-          "Short Duration Debt",
-          "SDFUND",
-          "Debt fund",
-          "INR 12k",
-          "41.88",
-        ],
-      },
-      { cells: ["Gold ETF", "GOLDBEES", "Commodity", "INR 15k", "63.44"] },
+      { cells: ["Flexi Cap Fund", "INR 1.8L", "10.1%"] },
+      { cells: ["Short Duration Debt", "INR 84k", "7.2%"] },
+      { cells: ["Gold ETF", "INR 72k", "8.6%"] },
     ],
   },
   transactions: {
@@ -1100,49 +1065,18 @@ function getInvestmentRow(
   return {
     cells: [
       investment.name,
-      investment.tickerSymbol,
-      formatNav(averageNav),
-      formatNav(investment.currentNav ?? null),
-      formatUnits(netUnits),
       formatInrMinor(currentValueMinor),
       formatXirr(xirr),
-      formatInrMinor(investment.monthlySipMinor),
     ],
     details: [
-      { label: "Name", value: investment.name },
       { label: "Ticker symbol", value: investment.tickerSymbol },
-      { label: "Category", value: investment.category ?? "Uncategorised" },
-      { label: "ISIN", value: investment.isin ?? "n/a" },
       { label: "Average NAV", value: formatNav(averageNav) },
       { label: "Current NAV", value: formatNav(investment.currentNav ?? null) },
       { label: "Units", value: formatUnits(netUnits) },
-      { label: "Current value", value: formatInrMinor(currentValueMinor) },
-      { label: "XIRR", value: formatXirr(xirr) },
       {
         label: "SIP amount",
         value: formatInrMinor(investment.monthlySipMinor),
       },
-      {
-        label: "Total bought",
-        value: formatInrMinor(investmentReturn?.totalBoughtMinor ?? 0),
-      },
-      {
-        label: "Total sold",
-        value: formatInrMinor(investmentReturn?.totalSoldMinor ?? 0),
-      },
-      {
-        label: "Transactions",
-        value: `${investmentReturn?.buyCount ?? 0} buy / ${
-          investmentReturn?.sellCount ?? 0
-        } sell`,
-      },
-      {
-        label: "NAV updated",
-        value: investment.navUpdatedAt
-          ? formatDate(toDate(investment.navUpdatedAt))
-          : "n/a",
-      },
-      { label: "Status", value: investment.isActive ? "Active" : "Inactive" },
     ],
     tone: index === 0 ? "accent" : investment.isActive ? "normal" : "muted",
   };
@@ -1540,6 +1474,11 @@ function WorkspaceHeader({
       </div>
       {section.key === "goals" ? (
         <GoalCreateDialog
+          actionLabel={section.actionLabel}
+          label={section.label}
+        />
+      ) : section.key === "investments" ? (
+        <InvestmentCreateDialog
           actionLabel={section.actionLabel}
           label={section.label}
         />
