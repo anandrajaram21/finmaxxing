@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ArrowsSplitIcon,
+  BookOpenTextIcon,
   ChartLineUpIcon,
   CurrencyInrIcon,
   ReceiptIcon,
@@ -43,9 +44,10 @@ export type SectionKey =
   | "investments"
   | "transactions"
   | "allocations"
-  | "assumptions";
+  | "assumptions"
+  | "instructions";
 
-type WorkspaceSectionKey = Exclude<SectionKey, "assumptions">;
+type WorkspaceSectionKey = Exclude<SectionKey, "assumptions" | "instructions">;
 
 type Field = {
   label: string;
@@ -419,6 +421,24 @@ const sections: Record<SectionKey, Section> = {
       { label: "Inflation", align: "right" },
       { label: "Expected return", align: "right" },
     ],
+    rows: [],
+  },
+  instructions: {
+    key: "instructions",
+    href: "/instructions",
+    label: "Instructions",
+    eyebrow: "Guide",
+    title: "Instructions",
+    description: "Learn the portfolio workflow and how each page fits together.",
+    icon: BookOpenTextIcon,
+    actionLabel: "Read guide",
+    stats: [
+      { label: "Setup", value: "5 steps", detail: "From assumptions to goals" },
+      { label: "Tracking", value: "NAV", detail: "Prices come from tickers" },
+      { label: "Progress", value: "Live", detail: "Allocations drive goals" },
+    ],
+    fields: [],
+    tableColumns: [],
     rows: [],
   },
 };
@@ -1159,6 +1179,10 @@ async function getWorkspaceData(
           },
         ],
       },
+      instructions: {
+        rows: [],
+        stats: [],
+      },
     },
   };
 }
@@ -1236,6 +1260,7 @@ function getEmptyWorkspaceData(): WorkspaceData {
       allocations: { rows: [], stats: emptyStats },
       assumptions: { rows: [], stats: emptyStats },
       goals: { rows: [], stats: emptyStats },
+      instructions: { rows: [], stats: emptyStats },
       investments: { rows: [], stats: emptyStats },
       transactions: { rows: [], stats: emptyStats },
     },
