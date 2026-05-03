@@ -694,7 +694,9 @@ async function getWorkspaceData(
     inflationRate: 0.06,
   };
   const marketQuotes =
-    sectionKey === "investments" || sectionKey === "transactions"
+    sectionKey === "goals" ||
+    sectionKey === "investments" ||
+    sectionKey === "transactions"
       ? await getInvestmentMarketQuotes(
           investmentRows.map((investment) => investment.tickerSymbol),
         )
@@ -809,10 +811,11 @@ async function getWorkspaceData(
     );
     const averageNav =
       totalBoughtUnits > 0 ? totalBoughtMinor / 100 / totalBoughtUnits : null;
+    const netInvestedMinor = Math.max(0, totalBoughtMinor - totalSoldMinor);
     const currentValueMinor =
       investment.currentNav && netUnits > 0
         ? Math.round(netUnits * investment.currentNav * 100)
-        : 0;
+        : netInvestedMinor;
     const transactionDates = investmentTransactions.map((transaction) =>
       toDate(transaction.transactionDate),
     );
