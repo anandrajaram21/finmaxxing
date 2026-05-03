@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import {
   ArrowsSplitIcon,
   BookOpenTextIcon,
@@ -8,7 +9,8 @@ import {
 } from "@phosphor-icons/react/ssr";
 import type { Icon } from "@phosphor-icons/react";
 
-import { Sidebar } from "@/app/_components/finance-workspace";
+import { Sidebar, WorkspaceContent } from "@/app/_components/finance-workspace";
+import { getSession } from "@/server/better-auth/server";
 
 type GuideStep = {
   body: string;
@@ -69,12 +71,15 @@ const referenceItems = [
   },
 ];
 
-export default function InstructionsPage() {
+export default async function InstructionsPage() {
+  const session = await getSession();
+  if (!session?.user?.id) redirect("/?auth=required");
+
   return (
     <main className="bg-background text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey="instructions" />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+        <WorkspaceContent>
           <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:px-10">
             <div className="min-w-0">
               <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
@@ -165,7 +170,7 @@ export default function InstructionsPage() {
               </div>
             </section>
           </section>
-        </div>
+        </WorkspaceContent>
       </div>
     </main>
   );

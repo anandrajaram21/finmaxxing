@@ -328,7 +328,7 @@ function InputField({
     <label className="grid gap-1.5">
       <span className="text-xs font-medium">{label}</span>
       <input
-        className="border-input bg-background focus-visible:ring-ring read-only:bg-muted/50 h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1 read-only:cursor-default"
+        className="border-input bg-background focus-visible:ring-ring read-only:bg-muted/50 h-9 w-full rounded-sm border px-3 text-sm outline-none read-only:cursor-default focus-visible:ring-1"
         inputMode={inputMode}
         min={min}
         onChange={(event) => onChange(event.target.value)}

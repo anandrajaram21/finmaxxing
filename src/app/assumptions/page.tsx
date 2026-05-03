@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { db } from "@/server/db";
 import { portfolioAssumptions } from "@/server/db/schema";
 import { getSession } from "@/server/better-auth/server";
-import { Sidebar } from "@/app/_components/finance-workspace";
+import { Sidebar, WorkspaceContent } from "@/app/_components/finance-workspace";
 
 type AssumptionValues = {
   currentYear: number;
@@ -22,15 +22,15 @@ const defaultAssumptions: AssumptionValues = {
 
 export default async function AssumptionsPage() {
   const session = await getSession();
-  const assumptions = session?.user?.id
-    ? await getAssumptions(session.user.id)
-    : defaultAssumptions;
+  if (!session?.user?.id) redirect("/?auth=required");
+
+  const assumptions = await getAssumptions(session.user.id);
 
   return (
     <main className="bg-background text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey="assumptions" />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+        <WorkspaceContent>
           <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:px-10">
             <div className="min-w-0">
               <div className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
@@ -75,7 +75,6 @@ export default async function AssumptionsPage() {
                   <input
                     className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
                     defaultValue={assumptions.currentYear}
-                    disabled={!session}
                     min="1900"
                     name="currentYear"
                     required
@@ -91,7 +90,6 @@ export default async function AssumptionsPage() {
                   <input
                     className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
                     defaultValue={toPercentInput(assumptions.inflationRate)}
-                    disabled={!session}
                     min="0"
                     name="inflationRate"
                     required
@@ -109,7 +107,6 @@ export default async function AssumptionsPage() {
                     defaultValue={toPercentInput(
                       assumptions.expectedReturnRate,
                     )}
-                    disabled={!session}
                     min="0"
                     name="expectedReturnRate"
                     required
@@ -120,18 +117,14 @@ export default async function AssumptionsPage() {
 
                 <div className="flex items-center justify-between gap-3 border-t pt-4">
                   <p className="text-muted-foreground text-xs">
-                    {session
-                      ? "Changes apply immediately to goal projections."
-                      : "Sign in to save assumptions."}
+                    Changes apply immediately to goal projections.
                   </p>
-                  <Button disabled={!session} type="submit">
-                    Save assumptions
-                  </Button>
+                  <Button type="submit">Save assumptions</Button>
                 </div>
               </form>
             </section>
           </section>
-        </div>
+        </WorkspaceContent>
       </div>
     </main>
   );
@@ -151,7 +144,7 @@ async function saveAssumptions(formData: FormData) {
   "use server";
 
   const session = await getSession();
-  if (!session?.user?.id) redirect("/assumptions");
+  if (!session?.user?.id) redirect("/?auth=required");
 
   const currentYear = parseInteger(formData.get("currentYear"));
   const inflationRate = parsePercent(formData.get("inflationRate"));

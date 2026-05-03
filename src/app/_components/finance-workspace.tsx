@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ArrowsSplitIcon,
@@ -10,13 +10,11 @@ import {
   CurrencyInrIcon,
   ReceiptIcon,
   SlidersHorizontalIcon,
-  SignOutIcon,
   TargetIcon,
+  TrendUpIcon,
 } from "@phosphor-icons/react/ssr";
 import type { Icon } from "@phosphor-icons/react";
 
-import { Button } from "@/components/ui/button";
-import { auth } from "@/server/better-auth";
 import { getSession } from "@/server/better-auth/server";
 import { db } from "@/server/db";
 import {
@@ -31,6 +29,7 @@ import {
   type InvestmentMarketQuote,
 } from "@/server/yahoo-finance";
 import { cn } from "@/lib/utils";
+import { AuthAction } from "./auth-action";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
@@ -41,6 +40,7 @@ import { ResourceDialog } from "./resource-dialog";
 import { ResourceTable, type TableRowAction } from "./resource-table";
 
 export type SectionKey =
+  | "dashboard"
   | "goals"
   | "investments"
   | "transactions"
@@ -48,7 +48,10 @@ export type SectionKey =
   | "assumptions"
   | "instructions";
 
-type WorkspaceSectionKey = Exclude<SectionKey, "assumptions" | "instructions">;
+type WorkspaceSectionKey = Exclude<
+  SectionKey,
+  "assumptions" | "dashboard" | "instructions"
+>;
 
 type Field = {
   label: string;
@@ -127,6 +130,25 @@ const sectionActions: Record<
 };
 
 const sections: Record<SectionKey, Section> = {
+  dashboard: {
+    key: "dashboard",
+    href: "/dashboard",
+    label: "Dashboard",
+    eyebrow: "Overview",
+    title: "Dashboard",
+    description:
+      "Review goal pressure, portfolio momentum, monthly flow, and setup health.",
+    icon: TrendUpIcon,
+    actionLabel: "Open dashboard",
+    stats: [
+      { label: "Goal corpus", value: "INR 0", detail: "Active targets" },
+      { label: "Current value", value: "n/a", detail: "Tracked holdings" },
+      { label: "Monthly SIP", value: "INR 0", detail: "Mapped flow" },
+    ],
+    fields: [],
+    tableColumns: [],
+    rows: [],
+  },
   goals: {
     key: "goals",
     href: "/goals",
@@ -430,7 +452,8 @@ const sections: Record<SectionKey, Section> = {
     label: "Instructions",
     eyebrow: "Guide",
     title: "Instructions",
-    description: "Learn the portfolio workflow and how each page fits together.",
+    description:
+      "Learn the portfolio workflow and how each page fits together.",
     icon: BookOpenTextIcon,
     actionLabel: "Read guide",
     stats: [
@@ -618,6 +641,9 @@ export async function FinanceWorkspace({
   fieldOptions?: FieldOptions;
   sectionKey: WorkspaceSectionKey;
 }) {
+  const session = await getSession();
+  if (!session?.user?.id) redirect("/?auth=required");
+
   const workspaceData = await getWorkspaceData(sectionKey);
   const section = {
     ...sections[sectionKey],
@@ -632,22 +658,47 @@ export async function FinanceWorkspace({
     <main className="bg-background text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey={sectionKey} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-          <WorkspaceHeader
-            fieldOptions={sectionFieldOptions}
-            section={section}
-          />
-          <section className="space-y-6 px-4 py-5 sm:px-6 lg:px-10">
-            <StatsGrid stats={section.stats} />
-            <ResourceTable
-              label={section.label}
-              rows={section.rows}
-              tableColumns={section.tableColumns}
-            />
-          </section>
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+          <div className="relative min-h-full overflow-hidden">
+            <WorkspaceBackdrop />
+            <div className="relative">
+              <WorkspaceHeader
+                fieldOptions={sectionFieldOptions}
+                section={section}
+              />
+              <section className="space-y-6 px-4 py-5 sm:px-6 lg:px-10">
+                <StatsGrid stats={section.stats} />
+                <ResourceTable
+                  label={section.label}
+                  rows={section.rows}
+                  tableColumns={section.tableColumns}
+                />
+              </section>
+            </div>
+          </div>
         </div>
       </div>
     </main>
+  );
+}
+
+export function WorkspaceBackdrop() {
+  return (
+    <div
+      aria-hidden="true"
+      className="absolute inset-x-0 top-0 h-80 bg-[linear-gradient(180deg,oklch(0.955_0.028_178),transparent)] dark:bg-[linear-gradient(180deg,oklch(0.255_0.04_212),transparent)]"
+    />
+  );
+}
+
+export function WorkspaceContent({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+      <div className="relative min-h-full overflow-hidden">
+        <WorkspaceBackdrop />
+        <div className="relative">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -899,9 +950,13 @@ async function getWorkspaceData(
         {
           amount: investmentReturn.currentValueMinor,
           date: getValuationDate(
-            investment.navUpdatedAt ? toDate(investment.navUpdatedAt) : new Date(),
+            investment.navUpdatedAt
+              ? toDate(investment.navUpdatedAt)
+              : new Date(),
             txRows
-              .filter((transaction) => transaction.investmentId === investment.id)
+              .filter(
+                (transaction) => transaction.investmentId === investment.id,
+              )
               .map((transaction) => toDate(transaction.transactionDate)),
           ),
         },
@@ -968,6 +1023,10 @@ async function getWorkspaceData(
       },
     },
     sections: {
+      dashboard: {
+        rows: [],
+        stats: [],
+      },
       allocations: {
         stats: [
           {
@@ -1260,6 +1319,7 @@ function getEmptyWorkspaceData(): WorkspaceData {
     sections: {
       allocations: { rows: [], stats: emptyStats },
       assumptions: { rows: [], stats: emptyStats },
+      dashboard: { rows: [], stats: emptyStats },
       goals: { rows: [], stats: emptyStats },
       instructions: { rows: [], stats: emptyStats },
       investments: { rows: [], stats: emptyStats },
@@ -1270,7 +1330,7 @@ function getEmptyWorkspaceData(): WorkspaceData {
 
 async function getRequiredUserId() {
   const session = await getSession();
-  if (!session?.user?.id) redirect("/");
+  if (!session?.user?.id) redirect("/?auth=required");
 
   return session.user.id;
 }
@@ -1496,9 +1556,7 @@ function toStartOfUtcDay(date: Date) {
 }
 
 function getDaySpan(startDate: Date, endDate: Date) {
-  return Math.round(
-    (endDate.getTime() - startDate.getTime()) / 86_400_000,
-  );
+  return Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000);
 }
 
 function formatInrMinor(amountMinor: number) {
@@ -1578,7 +1636,7 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   return (
     <aside className="border-border bg-sidebar/70 flex w-full shrink-0 flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
       <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:block lg:border-b">
-        <Link href="/goals" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
             <CurrencyInrIcon className="size-5" weight="bold" />
           </span>
@@ -1594,7 +1652,11 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
         <MobileSidebarMenu>
           <nav className="grid gap-1 p-2">
             {navItems.map((item) => (
-              <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
+              <SidebarNavLink
+                activeKey={activeKey}
+                item={item}
+                key={item.key}
+              />
             ))}
           </nav>
           <div className="border-t p-3">
@@ -1663,14 +1725,14 @@ function AuthPanel({
           {session.user?.email}
         </p>
       </div>
-      <AuthAction signedIn />
+      <AuthAction className="w-full" signedIn />
     </div>
   ) : (
     <div className="space-y-3">
       <p className="text-muted-foreground text-xs">
         Sign in to save portfolio records to your account.
       </p>
-      <AuthAction signedIn={false} />
+      <AuthAction callbackURL="/goals" className="w-full" signedIn={false} />
     </div>
   );
 }
@@ -1751,51 +1813,5 @@ function StatsGrid({ stats }: { stats: Stat[] }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function AuthAction({ signedIn }: { signedIn: boolean }) {
-  if (signedIn) {
-    return (
-      <form>
-        <Button
-          className="w-full justify-center"
-          formAction={async () => {
-            "use server";
-            await auth.api.signOut({
-              headers: await headers(),
-            });
-            redirect("/");
-          }}
-          variant="outline"
-        >
-          <SignOutIcon className="size-4" />
-          Sign out
-        </Button>
-      </form>
-    );
-  }
-
-  return (
-    <form>
-      <Button
-        className="w-full justify-center"
-        formAction={async () => {
-          "use server";
-          const res = await auth.api.signInSocial({
-            body: {
-              provider: "google",
-              callbackURL: "/goals",
-            },
-          });
-          if (!res.url) {
-            throw new Error("No URL returned from signInSocial");
-          }
-          redirect(res.url);
-        }}
-      >
-        Sign in
-      </Button>
-    </form>
   );
 }
