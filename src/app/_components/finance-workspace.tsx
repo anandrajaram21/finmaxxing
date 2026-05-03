@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ArrowsSplitIcon,
+  BookOpenTextIcon,
   ChartLineUpIcon,
   CurrencyInrIcon,
   ReceiptIcon,
@@ -25,10 +26,15 @@ import {
   portfolioAssumptions,
   transactions,
 } from "@/server/db/schema";
+import {
+  getInvestmentMarketQuotes,
+  type InvestmentMarketQuote,
+} from "@/server/yahoo-finance";
 import { cn } from "@/lib/utils";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
+import { MobileSidebarMenu } from "./mobile-sidebar-menu";
 import { ThemeToggle } from "./theme-toggle";
 import { TransactionCreateDialog } from "./transaction-create-dialog";
 import { ResourceDialog } from "./resource-dialog";
@@ -39,9 +45,10 @@ export type SectionKey =
   | "investments"
   | "transactions"
   | "allocations"
-  | "assumptions";
+  | "assumptions"
+  | "instructions";
 
-type WorkspaceSectionKey = Exclude<SectionKey, "assumptions">;
+type WorkspaceSectionKey = Exclude<SectionKey, "assumptions" | "instructions">;
 
 type Field = {
   label: string;
@@ -52,6 +59,7 @@ type Field = {
 };
 
 type FieldOption = {
+  currentNav?: number | null;
   label: string;
   value: string;
 };
@@ -230,17 +238,18 @@ const sections: Record<SectionKey, Section> = {
     ],
     tableColumns: [
       { label: "Fund name" },
+      { label: "Invested", align: "right" },
       { label: "Current value", align: "right" },
       { label: "XIRR", align: "right" },
     ],
     rows: [
       {
-        cells: ["Nifty 50 Index", "INR 2.5L", "12.4%"],
+        cells: ["Nifty 50 Index", "INR 2.1L", "INR 2.5L", "12.4%"],
         tone: "accent",
       },
-      { cells: ["Flexi Cap Fund", "INR 1.8L", "10.1%"] },
-      { cells: ["Short Duration Debt", "INR 84k", "7.2%"] },
-      { cells: ["Gold ETF", "INR 72k", "8.6%"] },
+      { cells: ["Flexi Cap Fund", "INR 1.6L", "INR 1.8L", "10.1%"] },
+      { cells: ["Short Duration Debt", "INR 80k", "INR 84k", "7.2%"] },
+      { cells: ["Gold ETF", "INR 65k", "INR 72k", "8.6%"] },
     ],
   },
   transactions: {
@@ -415,6 +424,24 @@ const sections: Record<SectionKey, Section> = {
     ],
     rows: [],
   },
+  instructions: {
+    key: "instructions",
+    href: "/instructions",
+    label: "Instructions",
+    eyebrow: "Guide",
+    title: "Instructions",
+    description: "Learn the portfolio workflow and how each page fits together.",
+    icon: BookOpenTextIcon,
+    actionLabel: "Read guide",
+    stats: [
+      { label: "Setup", value: "5 steps", detail: "From assumptions to goals" },
+      { label: "Tracking", value: "NAV", detail: "Prices come from tickers" },
+      { label: "Progress", value: "Live", detail: "Allocations drive goals" },
+    ],
+    fields: [],
+    tableColumns: [],
+    rows: [],
+  },
 };
 
 const navItems = Object.values(sections);
@@ -438,6 +465,10 @@ type InvestmentReturn = {
   totalBoughtMinor: number;
   totalSoldMinor: number;
   xirr: number | null;
+};
+
+type InvestmentWithMarketQuote = typeof investments.$inferSelect & {
+  marketQuote: InvestmentMarketQuote | null;
 };
 
 async function saveGoal(formData: FormData) {
@@ -587,7 +618,7 @@ export async function FinanceWorkspace({
   fieldOptions?: FieldOptions;
   sectionKey: WorkspaceSectionKey;
 }) {
-  const workspaceData = await getWorkspaceData();
+  const workspaceData = await getWorkspaceData(sectionKey);
   const section = {
     ...sections[sectionKey],
     ...workspaceData.sections[sectionKey],
@@ -601,12 +632,12 @@ export async function FinanceWorkspace({
     <main className="bg-background text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey={sectionKey} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
           <WorkspaceHeader
             fieldOptions={sectionFieldOptions}
             section={section}
           />
-          <section className="min-h-0 flex-1 space-y-6 overflow-auto px-4 py-5 sm:px-6 lg:px-10">
+          <section className="space-y-6 px-4 py-5 sm:px-6 lg:px-10">
             <StatsGrid stats={section.stats} />
             <ResourceTable
               label={section.label}
@@ -620,7 +651,9 @@ export async function FinanceWorkspace({
   );
 }
 
-async function getWorkspaceData(): Promise<WorkspaceData> {
+async function getWorkspaceData(
+  sectionKey: WorkspaceSectionKey,
+): Promise<WorkspaceData> {
   const session = await getSession();
   const userId = session?.user?.id;
 
@@ -681,7 +714,27 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     expectedReturnRate: 0.1,
     inflationRate: 0.06,
   };
-  const totalMonthlySipMinor = investmentRows.reduce(
+  const marketQuotes =
+    sectionKey === "goals" ||
+    sectionKey === "investments" ||
+    sectionKey === "transactions"
+      ? await getInvestmentMarketQuotes(
+          investmentRows.map((investment) => investment.tickerSymbol),
+        )
+      : new Map<string, InvestmentMarketQuote>();
+  const investmentsWithMarketQuotes = investmentRows.map((investment) => {
+    const marketQuote =
+      marketQuotes.get(investment.tickerSymbol.trim()) ?? null;
+
+    return {
+      ...investment,
+      currentNav: marketQuote?.price ?? investment.currentNav,
+      marketQuote,
+      navUpdatedAt:
+        marketQuote?.regularMarketTime ?? investment.navUpdatedAt ?? null,
+    };
+  });
+  const totalMonthlySipMinor = investmentsWithMarketQuotes.reduce(
     (sum, investment) =>
       investment.isActive ? sum + investment.monthlySipMinor : sum,
     0,
@@ -727,7 +780,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     (sum, goal) => sum + goal.projectedNeedMinor,
     0,
   );
-  const latestNavUpdatedAt = investmentRows.reduce<Date | null>(
+  const latestNavUpdatedAt = investmentsWithMarketQuotes.reduce<Date | null>(
     (latest, investment) => {
       if (!investment.navUpdatedAt) return latest;
       const updatedAt = toDate(investment.navUpdatedAt);
@@ -750,7 +803,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     totalBuyUnits > 0 ? totalBuyAmountMinor / 100 / totalBuyUnits : 0;
   const investmentReturns = new Map<number, InvestmentReturn>();
 
-  for (const investment of investmentRows) {
+  for (const investment of investmentsWithMarketQuotes) {
     const investmentTransactions = txRows.filter(
       (transaction) => transaction.investmentId === investment.id,
     );
@@ -779,13 +832,18 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     );
     const averageNav =
       totalBoughtUnits > 0 ? totalBoughtMinor / 100 / totalBoughtUnits : null;
+    const netInvestedMinor = Math.max(0, totalBoughtMinor - totalSoldMinor);
     const currentValueMinor =
       investment.currentNav && netUnits > 0
         ? Math.round(netUnits * investment.currentNav * 100)
-        : 0;
-    const terminalDate = investment.navUpdatedAt
-      ? toDate(investment.navUpdatedAt)
-      : new Date();
+        : netInvestedMinor;
+    const transactionDates = investmentTransactions.map((transaction) =>
+      toDate(transaction.transactionDate),
+    );
+    const terminalDate = getValuationDate(
+      investment.navUpdatedAt ? toDate(investment.navUpdatedAt) : new Date(),
+      transactionDates,
+    );
     const cashFlows = [
       ...investmentTransactions.map((transaction) => ({
         amount:
@@ -831,7 +889,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
           : transaction.amountMinor,
       date: toDate(transaction.transactionDate),
     })),
-    ...investmentRows.flatMap((investment) => {
+    ...investmentsWithMarketQuotes.flatMap((investment) => {
       const investmentReturn = investmentReturns.get(investment.id);
       if (!investmentReturn || investmentReturn.currentValueMinor <= 0) {
         return [];
@@ -840,9 +898,12 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
       return [
         {
           amount: investmentReturn.currentValueMinor,
-          date: investment.navUpdatedAt
-            ? toDate(investment.navUpdatedAt)
-            : new Date(),
+          date: getValuationDate(
+            investment.navUpdatedAt ? toDate(investment.navUpdatedAt) : new Date(),
+            txRows
+              .filter((transaction) => transaction.investmentId === investment.id)
+              .map((transaction) => toDate(transaction.transactionDate)),
+          ),
         },
       ];
     }),
@@ -867,19 +928,23 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
   const largestGoal = Array.from(flowByGoalName.entries()).sort(
     (a, b) => b[1] - a[1],
   )[0];
-  const allocatedMonthlySipMinor = investmentRows.reduce((sum, investment) => {
-    const allocatedPercent = Math.min(
-      allocatedPercentByInvestment.get(investment.id) ?? 0,
-      1,
-    );
-    return sum + investment.monthlySipMinor * allocatedPercent;
-  }, 0);
+  const allocatedMonthlySipMinor = investmentsWithMarketQuotes.reduce(
+    (sum, investment) => {
+      const allocatedPercent = Math.min(
+        allocatedPercentByInvestment.get(investment.id) ?? 0,
+        1,
+      );
+      return sum + investment.monthlySipMinor * allocatedPercent;
+    },
+    0,
+  );
   const unallocatedPercent =
     totalMonthlySipMinor > 0
       ? Math.max(0, 1 - allocatedMonthlySipMinor / totalMonthlySipMinor)
       : 0;
 
-  const investmentOptions = investmentRows.map((investment) => ({
+  const investmentOptions = investmentsWithMarketQuotes.map((investment) => ({
+    currentNav: investment.currentNav,
     label: investment.name,
     value: String(investment.id),
   }));
@@ -1012,7 +1077,9 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
             detail: "Active holdings",
             label: "Instruments",
             value: String(
-              investmentRows.filter((investment) => investment.isActive).length,
+              investmentsWithMarketQuotes.filter(
+                (investment) => investment.isActive,
+              ).length,
             ),
           },
           {
@@ -1028,7 +1095,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
             value: formatXirr(portfolioXirr),
           },
         ],
-        rows: investmentRows.map((investment, index) => ({
+        rows: investmentsWithMarketQuotes.map((investment, index) => ({
           ...getInvestmentRow(
             investment,
             investmentReturns.get(investment.id),
@@ -1113,19 +1180,34 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
           },
         ],
       },
+      instructions: {
+        rows: [],
+        stats: [],
+      },
     },
   };
 }
 
 function getInvestmentRow(
-  investment: typeof investments.$inferSelect,
+  investment: InvestmentWithMarketQuote,
   investmentReturn: InvestmentReturn | undefined,
   index: number,
 ): TableRow {
   const averageNav = investmentReturn?.averageNav ?? null;
   const currentValueMinor = investmentReturn?.currentValueMinor ?? 0;
+  const investedMinor = Math.max(
+    0,
+    (investmentReturn?.totalBoughtMinor ?? 0) -
+      (investmentReturn?.totalSoldMinor ?? 0),
+  );
   const netUnits = investmentReturn?.netUnits ?? 0;
   const xirr = investmentReturn?.xirr ?? null;
+  const navUpdatedAt = investment.navUpdatedAt
+    ? toDate(investment.navUpdatedAt)
+    : null;
+  const navSource = investment.marketQuote
+    ? `Yahoo ${investment.marketQuote.yahooSymbol}`
+    : "Saved value";
 
   return {
     action: {
@@ -1139,6 +1221,7 @@ function getInvestmentRow(
     },
     cells: [
       investment.name,
+      formatInrMinor(investedMinor),
       formatInrMinor(currentValueMinor),
       formatXirr(xirr),
     ],
@@ -1146,6 +1229,15 @@ function getInvestmentRow(
       { label: "Ticker symbol", value: investment.tickerSymbol },
       { label: "Average NAV", value: formatNav(averageNav) },
       { label: "Current NAV", value: formatNav(investment.currentNav ?? null) },
+      { label: "NAV source", value: navSource },
+      {
+        label: "NAV updated",
+        value: navUpdatedAt ? formatDate(navUpdatedAt) : "n/a",
+      },
+      {
+        label: "Currency",
+        value: investment.marketQuote?.currency ?? "n/a",
+      },
       { label: "Units", value: formatUnits(netUnits) },
       {
         label: "SIP amount",
@@ -1169,6 +1261,7 @@ function getEmptyWorkspaceData(): WorkspaceData {
       allocations: { rows: [], stats: emptyStats },
       assumptions: { rows: [], stats: emptyStats },
       goals: { rows: [], stats: emptyStats },
+      instructions: { rows: [], stats: emptyStats },
       investments: { rows: [], stats: emptyStats },
       transactions: { rows: [], stats: emptyStats },
     },
@@ -1324,22 +1417,26 @@ type CashFlow = {
 };
 
 function calculateXirr(cashFlows: CashFlow[]) {
-  const validCashFlows = cashFlows.filter((cashFlow) => cashFlow.amount !== 0);
+  const validCashFlows = cashFlows
+    .filter((cashFlow) => cashFlow.amount !== 0)
+    .map((cashFlow) => ({
+      amount: cashFlow.amount,
+      date: toStartOfUtcDay(cashFlow.date),
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
   const hasInflow = validCashFlows.some((cashFlow) => cashFlow.amount > 0);
   const hasOutflow = validCashFlows.some((cashFlow) => cashFlow.amount < 0);
   const firstDate = validCashFlows[0]?.date;
+  const lastDate = validCashFlows.at(-1)?.date;
 
-  if (!firstDate || !hasInflow || !hasOutflow) return null;
+  if (!firstDate || !lastDate || !hasInflow || !hasOutflow) return null;
 
-  const hasDistinctDates = validCashFlows.some(
-    (cashFlow) => cashFlow.date.getTime() !== firstDate.getTime(),
-  );
-  if (!hasDistinctDates) return null;
+  const daySpan = getDaySpan(firstDate, lastDate);
+  if (daySpan < 30) return null;
 
   const npvAt = (rate: number) =>
     validCashFlows.reduce((sum, cashFlow) => {
-      const years =
-        (cashFlow.date.getTime() - firstDate.getTime()) / 31_557_600_000;
+      const years = getDaySpan(firstDate, cashFlow.date) / 365.2425;
       return sum + cashFlow.amount / Math.pow(1 + rate, years);
     }, 0);
 
@@ -1372,7 +1469,36 @@ function calculateXirr(cashFlows: CashFlow[]) {
     }
   }
 
-  return (low + high) / 2;
+  const result = (low + high) / 2;
+  if (!Number.isFinite(result) || Math.abs(result) > 10) return null;
+
+  return result;
+}
+
+function getValuationDate(valuationDate: Date, transactionDates: Date[]) {
+  const latestTransactionDate = transactionDates.reduce<Date | null>(
+    (latest, transactionDate) =>
+      !latest || transactionDate > latest ? transactionDate : latest,
+    null,
+  );
+
+  if (!latestTransactionDate || valuationDate >= latestTransactionDate) {
+    return valuationDate;
+  }
+
+  return latestTransactionDate;
+}
+
+function toStartOfUtcDay(date: Date) {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+function getDaySpan(startDate: Date, endDate: Date) {
+  return Math.round(
+    (endDate.getTime() - startDate.getTime()) / 86_400_000,
+  );
 }
 
 function formatInrMinor(amountMinor: number) {
@@ -1450,8 +1576,8 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   const session = await getSession();
 
   return (
-    <aside className="border-border bg-sidebar/70 flex min-h-0 w-full flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-4 lg:block">
+    <aside className="border-border bg-sidebar/70 flex w-full shrink-0 flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
+      <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:block lg:border-b">
         <Link href="/goals" className="flex items-center gap-3">
           <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
             <CurrencyInrIcon className="size-5" weight="bold" />
@@ -1465,60 +1591,87 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
             </span>
           </span>
         </Link>
-        <div className="lg:hidden">
-          <AuthAction signedIn={Boolean(session)} />
-        </div>
+        <MobileSidebarMenu>
+          <nav className="grid gap-1 p-2">
+            {navItems.map((item) => (
+              <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
+            ))}
+          </nav>
+          <div className="border-t p-3">
+            <div className="mb-3">
+              <ThemeToggle />
+            </div>
+            <AuthPanel session={session} />
+          </div>
+        </MobileSidebarMenu>
       </div>
 
-      <nav className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-4 lg:grid-cols-1 lg:p-3">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = item.key === activeKey;
-
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={cn(
-                "flex h-10 items-center gap-2 rounded-sm px-3 text-sm transition",
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              )}
-            >
-              <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="hidden gap-1 p-3 lg:grid">
+        {navItems.map((item) => (
+          <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
+        ))}
       </nav>
 
-      <div className="mt-auto border-t p-3 lg:shrink-0">
+      <div className="mt-auto hidden border-t p-3 lg:block lg:shrink-0">
         <div className="mb-3">
           <ThemeToggle />
         </div>
-        {session ? (
-          <div className="space-y-3">
-            <div>
-              <p className="truncate text-sm font-medium">
-                {session.user?.name ?? "Signed in"}
-              </p>
-              <p className="text-muted-foreground truncate text-xs">
-                {session.user?.email}
-              </p>
-            </div>
-            <AuthAction signedIn />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-muted-foreground text-xs">
-              Sign in to save portfolio records to your account.
-            </p>
-            <AuthAction signedIn={false} />
-          </div>
-        )}
+        <AuthPanel session={session} />
       </div>
     </aside>
+  );
+}
+
+function SidebarNavLink({
+  activeKey,
+  item,
+}: {
+  activeKey: SectionKey;
+  item: Section;
+}) {
+  const Icon = item.icon;
+  const isActive = item.key === activeKey;
+
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex h-10 items-center gap-2 rounded-sm px-3 text-sm transition",
+        isActive
+          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+      )}
+    >
+      <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
+      <span>{item.label}</span>
+    </Link>
+  );
+}
+
+function AuthPanel({
+  session,
+}: {
+  session: Awaited<ReturnType<typeof getSession>>;
+}) {
+  return session ? (
+    <div className="space-y-3">
+      <div>
+        <p className="truncate text-sm font-medium">
+          {session.user?.name ?? "Signed in"}
+        </p>
+        <p className="text-muted-foreground truncate text-xs">
+          {session.user?.email}
+        </p>
+      </div>
+      <AuthAction signedIn />
+    </div>
+  ) : (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-xs">
+        Sign in to save portfolio records to your account.
+      </p>
+      <AuthAction signedIn={false} />
+    </div>
   );
 }
 
