@@ -813,9 +813,13 @@ async function getWorkspaceData(
       investment.currentNav && netUnits > 0
         ? Math.round(netUnits * investment.currentNav * 100)
         : 0;
-    const terminalDate = investment.navUpdatedAt
-      ? toDate(investment.navUpdatedAt)
-      : new Date();
+    const transactionDates = investmentTransactions.map((transaction) =>
+      toDate(transaction.transactionDate),
+    );
+    const terminalDate = getValuationDate(
+      investment.navUpdatedAt ? toDate(investment.navUpdatedAt) : new Date(),
+      transactionDates,
+    );
     const cashFlows = [
       ...investmentTransactions.map((transaction) => ({
         amount:
@@ -870,9 +874,12 @@ async function getWorkspaceData(
       return [
         {
           amount: investmentReturn.currentValueMinor,
-          date: investment.navUpdatedAt
-            ? toDate(investment.navUpdatedAt)
-            : new Date(),
+          date: getValuationDate(
+            investment.navUpdatedAt ? toDate(investment.navUpdatedAt) : new Date(),
+            txRows
+              .filter((transaction) => transaction.investmentId === investment.id)
+              .map((transaction) => toDate(transaction.transactionDate)),
+          ),
         },
       ];
     }),
@@ -1381,22 +1388,26 @@ type CashFlow = {
 };
 
 function calculateXirr(cashFlows: CashFlow[]) {
-  const validCashFlows = cashFlows.filter((cashFlow) => cashFlow.amount !== 0);
+  const validCashFlows = cashFlows
+    .filter((cashFlow) => cashFlow.amount !== 0)
+    .map((cashFlow) => ({
+      amount: cashFlow.amount,
+      date: toStartOfUtcDay(cashFlow.date),
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
   const hasInflow = validCashFlows.some((cashFlow) => cashFlow.amount > 0);
   const hasOutflow = validCashFlows.some((cashFlow) => cashFlow.amount < 0);
   const firstDate = validCashFlows[0]?.date;
+  const lastDate = validCashFlows.at(-1)?.date;
 
-  if (!firstDate || !hasInflow || !hasOutflow) return null;
+  if (!firstDate || !lastDate || !hasInflow || !hasOutflow) return null;
 
-  const hasDistinctDates = validCashFlows.some(
-    (cashFlow) => cashFlow.date.getTime() !== firstDate.getTime(),
-  );
-  if (!hasDistinctDates) return null;
+  const daySpan = getDaySpan(firstDate, lastDate);
+  if (daySpan < 30) return null;
 
   const npvAt = (rate: number) =>
     validCashFlows.reduce((sum, cashFlow) => {
-      const years =
-        (cashFlow.date.getTime() - firstDate.getTime()) / 31_557_600_000;
+      const years = getDaySpan(firstDate, cashFlow.date) / 365.2425;
       return sum + cashFlow.amount / Math.pow(1 + rate, years);
     }, 0);
 
@@ -1429,7 +1440,36 @@ function calculateXirr(cashFlows: CashFlow[]) {
     }
   }
 
-  return (low + high) / 2;
+  const result = (low + high) / 2;
+  if (!Number.isFinite(result) || Math.abs(result) > 10) return null;
+
+  return result;
+}
+
+function getValuationDate(valuationDate: Date, transactionDates: Date[]) {
+  const latestTransactionDate = transactionDates.reduce<Date | null>(
+    (latest, transactionDate) =>
+      !latest || transactionDate > latest ? transactionDate : latest,
+    null,
+  );
+
+  if (!latestTransactionDate || valuationDate >= latestTransactionDate) {
+    return valuationDate;
+  }
+
+  return latestTransactionDate;
+}
+
+function toStartOfUtcDay(date: Date) {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+function getDaySpan(startDate: Date, endDate: Date) {
+  return Math.round(
+    (endDate.getTime() - startDate.getTime()) / 86_400_000,
+  );
 }
 
 function formatInrMinor(amountMinor: number) {
