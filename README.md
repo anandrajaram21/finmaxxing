@@ -37,6 +37,7 @@ BETTER_AUTH_URL="http://localhost:3000"
 BETTER_AUTH_SECRET="your-local-secret"
 BETTER_AUTH_GOOGLE_CLIENT_ID="your-google-client-id"
 BETTER_AUTH_GOOGLE_CLIENT_SECRET="your-google-client-secret"
+DATABASE_AUTH_TOKEN=""
 DATABASE_URL="file:./db.sqlite"
 ```
 
@@ -184,3 +185,7 @@ Google OAuth client secret.
 `DATABASE_URL`
 
 Database connection URL. For local SQLite, use `file:./db.sqlite`.
+
+`DATABASE_AUTH_TOKEN`
+
+Optional libSQL/Turso database auth token. Leave empty for local SQLite.
