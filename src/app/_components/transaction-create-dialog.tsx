@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
 
 type FieldOption = {
+  currentNav?: number | null;
   label: string;
   value: string;
 };
@@ -29,7 +30,6 @@ export function TransactionCreateDialog({
   const [transactionDate, setTransactionDate] = useState("");
   const [type, setType] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
-  const [units, setUnits] = useState("");
   const [nav, setNav] = useState("");
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -43,14 +43,29 @@ export function TransactionCreateDialog({
     const parsed = Number(investmentId);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }, [investmentId]);
+  const selectedInvestment = useMemo(
+    () => investmentOptions.find((option) => option.value === investmentId),
+    [investmentId, investmentOptions],
+  );
 
   const parsedDate = useMemo(
     () => parseDate(transactionDate),
     [transactionDate],
   );
   const amountMinor = useMemo(() => parseMoneyMinor(amount), [amount]);
-  const unitsValue = useMemo(() => parsePositiveNumber(units), [units]);
   const navValue = useMemo(() => parsePositiveNumber(nav), [nav]);
+  const unitsValue = useMemo(() => {
+    if (amountMinor === null || navValue === null) return null;
+
+    const calculatedUnits = amountMinor / 100 / navValue;
+    return Number.isFinite(calculatedUnits) && calculatedUnits > 0
+      ? calculatedUnits
+      : null;
+  }, [amountMinor, navValue]);
+  const units = useMemo(
+    () => (unitsValue === null ? "" : formatUnitsInput(unitsValue)),
+    [unitsValue],
+  );
 
   const isFormValid =
     parsedInvestmentId !== null &&
@@ -73,12 +88,21 @@ export function TransactionCreateDialog({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [createTransaction.isPending, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !investmentId) return;
+
+    setNav(
+      typeof selectedInvestment?.currentNav === "number"
+        ? formatNumberInput(selectedInvestment.currentNav)
+        : "",
+    );
+  }, [investmentId, isOpen, selectedInvestment?.currentNav]);
+
   function resetForm() {
     setInvestmentId("");
     setTransactionDate("");
     setType("buy");
     setAmount("");
-    setUnits("");
     setNav("");
     setNotes("");
     setFormError(null);
@@ -104,7 +128,7 @@ export function TransactionCreateDialog({
       unitsValue === null ||
       navValue === null
     ) {
-      setFormError("Enter investment, date, amount, units, and NAV.");
+      setFormError("Enter investment, date, amount, and NAV.");
       return;
     }
 
@@ -218,8 +242,9 @@ export function TransactionCreateDialog({
                   inputMode="decimal"
                   label="Units"
                   min="0.000001"
-                  onChange={setUnits}
+                  onChange={() => undefined}
                   placeholder="100.596"
+                  readOnly
                   step="0.000001"
                   type="number"
                   value={units}
@@ -284,6 +309,7 @@ function InputField({
   min,
   onChange,
   placeholder,
+  readOnly = false,
   step,
   type = "text",
   value,
@@ -293,6 +319,7 @@ function InputField({
   min?: string;
   onChange: (value: string) => void;
   placeholder: string;
+  readOnly?: boolean;
   step?: string;
   type?: string;
   value: string;
@@ -301,11 +328,12 @@ function InputField({
     <label className="grid gap-1.5">
       <span className="text-xs font-medium">{label}</span>
       <input
-        className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
+        className="border-input bg-background focus-visible:ring-ring read-only:bg-muted/50 h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1 read-only:cursor-default"
         inputMode={inputMode}
         min={min}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
         required
         step={step}
         type={type}
@@ -364,6 +392,18 @@ function parseMoneyMinor(value: string) {
   if (parsed === null) return null;
 
   return Math.round(parsed * 100);
+}
+
+function formatUnitsInput(value: number) {
+  return formatNumberInput(value, 6);
+}
+
+function formatNumberInput(value: number, maximumFractionDigits = 4) {
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits,
+    minimumFractionDigits: 0,
+    useGrouping: false,
+  });
 }
 
 function parsePositiveNumber(value: string) {

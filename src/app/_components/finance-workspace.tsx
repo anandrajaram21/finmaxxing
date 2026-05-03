@@ -25,6 +25,10 @@ import {
   portfolioAssumptions,
   transactions,
 } from "@/server/db/schema";
+import {
+  getInvestmentMarketQuotes,
+  type InvestmentMarketQuote,
+} from "@/server/yahoo-finance";
 import { cn } from "@/lib/utils";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
 import { GoalCreateDialog } from "./goal-create-dialog";
@@ -52,6 +56,7 @@ type Field = {
 };
 
 type FieldOption = {
+  currentNav?: number | null;
   label: string;
   value: string;
 };
@@ -230,17 +235,18 @@ const sections: Record<SectionKey, Section> = {
     ],
     tableColumns: [
       { label: "Fund name" },
+      { label: "Invested", align: "right" },
       { label: "Current value", align: "right" },
       { label: "XIRR", align: "right" },
     ],
     rows: [
       {
-        cells: ["Nifty 50 Index", "INR 2.5L", "12.4%"],
+        cells: ["Nifty 50 Index", "INR 2.1L", "INR 2.5L", "12.4%"],
         tone: "accent",
       },
-      { cells: ["Flexi Cap Fund", "INR 1.8L", "10.1%"] },
-      { cells: ["Short Duration Debt", "INR 84k", "7.2%"] },
-      { cells: ["Gold ETF", "INR 72k", "8.6%"] },
+      { cells: ["Flexi Cap Fund", "INR 1.6L", "INR 1.8L", "10.1%"] },
+      { cells: ["Short Duration Debt", "INR 80k", "INR 84k", "7.2%"] },
+      { cells: ["Gold ETF", "INR 65k", "INR 72k", "8.6%"] },
     ],
   },
   transactions: {
@@ -440,6 +446,10 @@ type InvestmentReturn = {
   xirr: number | null;
 };
 
+type InvestmentWithMarketQuote = typeof investments.$inferSelect & {
+  marketQuote: InvestmentMarketQuote | null;
+};
+
 async function saveGoal(formData: FormData) {
   "use server";
 
@@ -587,7 +597,7 @@ export async function FinanceWorkspace({
   fieldOptions?: FieldOptions;
   sectionKey: WorkspaceSectionKey;
 }) {
-  const workspaceData = await getWorkspaceData();
+  const workspaceData = await getWorkspaceData(sectionKey);
   const section = {
     ...sections[sectionKey],
     ...workspaceData.sections[sectionKey],
@@ -620,7 +630,9 @@ export async function FinanceWorkspace({
   );
 }
 
-async function getWorkspaceData(): Promise<WorkspaceData> {
+async function getWorkspaceData(
+  sectionKey: WorkspaceSectionKey,
+): Promise<WorkspaceData> {
   const session = await getSession();
   const userId = session?.user?.id;
 
@@ -681,7 +693,25 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     expectedReturnRate: 0.1,
     inflationRate: 0.06,
   };
-  const totalMonthlySipMinor = investmentRows.reduce(
+  const marketQuotes =
+    sectionKey === "investments" || sectionKey === "transactions"
+      ? await getInvestmentMarketQuotes(
+          investmentRows.map((investment) => investment.tickerSymbol),
+        )
+      : new Map<string, InvestmentMarketQuote>();
+  const investmentsWithMarketQuotes = investmentRows.map((investment) => {
+    const marketQuote =
+      marketQuotes.get(investment.tickerSymbol.trim()) ?? null;
+
+    return {
+      ...investment,
+      currentNav: marketQuote?.price ?? investment.currentNav,
+      marketQuote,
+      navUpdatedAt:
+        marketQuote?.regularMarketTime ?? investment.navUpdatedAt ?? null,
+    };
+  });
+  const totalMonthlySipMinor = investmentsWithMarketQuotes.reduce(
     (sum, investment) =>
       investment.isActive ? sum + investment.monthlySipMinor : sum,
     0,
@@ -727,7 +757,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     (sum, goal) => sum + goal.projectedNeedMinor,
     0,
   );
-  const latestNavUpdatedAt = investmentRows.reduce<Date | null>(
+  const latestNavUpdatedAt = investmentsWithMarketQuotes.reduce<Date | null>(
     (latest, investment) => {
       if (!investment.navUpdatedAt) return latest;
       const updatedAt = toDate(investment.navUpdatedAt);
@@ -750,7 +780,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
     totalBuyUnits > 0 ? totalBuyAmountMinor / 100 / totalBuyUnits : 0;
   const investmentReturns = new Map<number, InvestmentReturn>();
 
-  for (const investment of investmentRows) {
+  for (const investment of investmentsWithMarketQuotes) {
     const investmentTransactions = txRows.filter(
       (transaction) => transaction.investmentId === investment.id,
     );
@@ -831,7 +861,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
           : transaction.amountMinor,
       date: toDate(transaction.transactionDate),
     })),
-    ...investmentRows.flatMap((investment) => {
+    ...investmentsWithMarketQuotes.flatMap((investment) => {
       const investmentReturn = investmentReturns.get(investment.id);
       if (!investmentReturn || investmentReturn.currentValueMinor <= 0) {
         return [];
@@ -867,19 +897,23 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
   const largestGoal = Array.from(flowByGoalName.entries()).sort(
     (a, b) => b[1] - a[1],
   )[0];
-  const allocatedMonthlySipMinor = investmentRows.reduce((sum, investment) => {
-    const allocatedPercent = Math.min(
-      allocatedPercentByInvestment.get(investment.id) ?? 0,
-      1,
-    );
-    return sum + investment.monthlySipMinor * allocatedPercent;
-  }, 0);
+  const allocatedMonthlySipMinor = investmentsWithMarketQuotes.reduce(
+    (sum, investment) => {
+      const allocatedPercent = Math.min(
+        allocatedPercentByInvestment.get(investment.id) ?? 0,
+        1,
+      );
+      return sum + investment.monthlySipMinor * allocatedPercent;
+    },
+    0,
+  );
   const unallocatedPercent =
     totalMonthlySipMinor > 0
       ? Math.max(0, 1 - allocatedMonthlySipMinor / totalMonthlySipMinor)
       : 0;
 
-  const investmentOptions = investmentRows.map((investment) => ({
+  const investmentOptions = investmentsWithMarketQuotes.map((investment) => ({
+    currentNav: investment.currentNav,
     label: investment.name,
     value: String(investment.id),
   }));
@@ -1012,7 +1046,9 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
             detail: "Active holdings",
             label: "Instruments",
             value: String(
-              investmentRows.filter((investment) => investment.isActive).length,
+              investmentsWithMarketQuotes.filter(
+                (investment) => investment.isActive,
+              ).length,
             ),
           },
           {
@@ -1028,7 +1064,7 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
             value: formatXirr(portfolioXirr),
           },
         ],
-        rows: investmentRows.map((investment, index) => ({
+        rows: investmentsWithMarketQuotes.map((investment, index) => ({
           ...getInvestmentRow(
             investment,
             investmentReturns.get(investment.id),
@@ -1118,14 +1154,25 @@ async function getWorkspaceData(): Promise<WorkspaceData> {
 }
 
 function getInvestmentRow(
-  investment: typeof investments.$inferSelect,
+  investment: InvestmentWithMarketQuote,
   investmentReturn: InvestmentReturn | undefined,
   index: number,
 ): TableRow {
   const averageNav = investmentReturn?.averageNav ?? null;
   const currentValueMinor = investmentReturn?.currentValueMinor ?? 0;
+  const investedMinor = Math.max(
+    0,
+    (investmentReturn?.totalBoughtMinor ?? 0) -
+      (investmentReturn?.totalSoldMinor ?? 0),
+  );
   const netUnits = investmentReturn?.netUnits ?? 0;
   const xirr = investmentReturn?.xirr ?? null;
+  const navUpdatedAt = investment.navUpdatedAt
+    ? toDate(investment.navUpdatedAt)
+    : null;
+  const navSource = investment.marketQuote
+    ? `Yahoo ${investment.marketQuote.yahooSymbol}`
+    : "Saved value";
 
   return {
     action: {
@@ -1139,6 +1186,7 @@ function getInvestmentRow(
     },
     cells: [
       investment.name,
+      formatInrMinor(investedMinor),
       formatInrMinor(currentValueMinor),
       formatXirr(xirr),
     ],
@@ -1146,6 +1194,15 @@ function getInvestmentRow(
       { label: "Ticker symbol", value: investment.tickerSymbol },
       { label: "Average NAV", value: formatNav(averageNav) },
       { label: "Current NAV", value: formatNav(investment.currentNav ?? null) },
+      { label: "NAV source", value: navSource },
+      {
+        label: "NAV updated",
+        value: navUpdatedAt ? formatDate(navUpdatedAt) : "n/a",
+      },
+      {
+        label: "Currency",
+        value: investment.marketQuote?.currency ?? "n/a",
+      },
       { label: "Units", value: formatUnits(netUnits) },
       {
         label: "SIP amount",
