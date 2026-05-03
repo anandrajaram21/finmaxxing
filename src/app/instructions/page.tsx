@@ -74,7 +74,7 @@ export default function InstructionsPage() {
     <main className="bg-background text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey="instructions" />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
           <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:px-10">
             <div className="min-w-0">
               <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
@@ -91,7 +91,7 @@ export default function InstructionsPage() {
             </div>
           </header>
 
-          <section className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-10">
+          <section className="px-4 py-5 sm:px-6 lg:px-10">
             <div className="grid gap-3 sm:grid-cols-3">
               <GuideStat
                 detail="Assumptions, goals, investments"

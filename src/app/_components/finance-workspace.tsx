@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
+import { MobileSidebarMenu } from "./mobile-sidebar-menu";
 import { ThemeToggle } from "./theme-toggle";
 import { TransactionCreateDialog } from "./transaction-create-dialog";
 import { ResourceDialog } from "./resource-dialog";
@@ -631,12 +632,12 @@ export async function FinanceWorkspace({
     <main className="bg-background text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey={sectionKey} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
           <WorkspaceHeader
             fieldOptions={sectionFieldOptions}
             section={section}
           />
-          <section className="min-h-0 flex-1 space-y-6 overflow-auto px-4 py-5 sm:px-6 lg:px-10">
+          <section className="space-y-6 px-4 py-5 sm:px-6 lg:px-10">
             <StatsGrid stats={section.stats} />
             <ResourceTable
               label={section.label}
@@ -1575,8 +1576,8 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   const session = await getSession();
 
   return (
-    <aside className="border-border bg-sidebar/70 flex min-h-0 w-full flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-4 lg:block">
+    <aside className="border-border bg-sidebar/70 flex w-full shrink-0 flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
+      <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:block lg:border-b">
         <Link href="/goals" className="flex items-center gap-3">
           <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
             <CurrencyInrIcon className="size-5" weight="bold" />
@@ -1590,60 +1591,87 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
             </span>
           </span>
         </Link>
-        <div className="lg:hidden">
-          <AuthAction signedIn={Boolean(session)} />
-        </div>
+        <MobileSidebarMenu>
+          <nav className="grid gap-1 p-2">
+            {navItems.map((item) => (
+              <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
+            ))}
+          </nav>
+          <div className="border-t p-3">
+            <div className="mb-3">
+              <ThemeToggle />
+            </div>
+            <AuthPanel session={session} />
+          </div>
+        </MobileSidebarMenu>
       </div>
 
-      <nav className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-4 lg:grid-cols-1 lg:p-3">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = item.key === activeKey;
-
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={cn(
-                "flex h-10 items-center gap-2 rounded-sm px-3 text-sm transition",
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              )}
-            >
-              <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="hidden gap-1 p-3 lg:grid">
+        {navItems.map((item) => (
+          <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
+        ))}
       </nav>
 
-      <div className="mt-auto border-t p-3 lg:shrink-0">
+      <div className="mt-auto hidden border-t p-3 lg:block lg:shrink-0">
         <div className="mb-3">
           <ThemeToggle />
         </div>
-        {session ? (
-          <div className="space-y-3">
-            <div>
-              <p className="truncate text-sm font-medium">
-                {session.user?.name ?? "Signed in"}
-              </p>
-              <p className="text-muted-foreground truncate text-xs">
-                {session.user?.email}
-              </p>
-            </div>
-            <AuthAction signedIn />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-muted-foreground text-xs">
-              Sign in to save portfolio records to your account.
-            </p>
-            <AuthAction signedIn={false} />
-          </div>
-        )}
+        <AuthPanel session={session} />
       </div>
     </aside>
+  );
+}
+
+function SidebarNavLink({
+  activeKey,
+  item,
+}: {
+  activeKey: SectionKey;
+  item: Section;
+}) {
+  const Icon = item.icon;
+  const isActive = item.key === activeKey;
+
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex h-10 items-center gap-2 rounded-sm px-3 text-sm transition",
+        isActive
+          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+      )}
+    >
+      <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
+      <span>{item.label}</span>
+    </Link>
+  );
+}
+
+function AuthPanel({
+  session,
+}: {
+  session: Awaited<ReturnType<typeof getSession>>;
+}) {
+  return session ? (
+    <div className="space-y-3">
+      <div>
+        <p className="truncate text-sm font-medium">
+          {session.user?.name ?? "Signed in"}
+        </p>
+        <p className="text-muted-foreground truncate text-xs">
+          {session.user?.email}
+        </p>
+      </div>
+      <AuthAction signedIn />
+    </div>
+  ) : (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-xs">
+        Sign in to save portfolio records to your account.
+      </p>
+      <AuthAction signedIn={false} />
+    </div>
   );
 }
 
