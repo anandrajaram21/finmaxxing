@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { CaretDownIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
+import { PlusIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
+import { DialogFooter, DialogShell } from "@/app/_components/dialog-shell";
+import {
+  InputField,
+  SelectField,
+  TextareaField,
+} from "@/app/_components/form-controls";
 import { api } from "@/trpc/react";
 
 type FieldOption = {
@@ -34,8 +40,6 @@ export function TransactionCreateDialog({
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
-  const titleId = useId();
-  const errorId = useId();
   const utils = api.useUtils();
   const createTransaction = api.transactions.create.useMutation();
 
@@ -76,19 +80,6 @@ export function TransactionCreateDialog({
   const errorMessage = formError ?? createTransaction.error?.message;
 
   useEffect(() => {
-    if (!isOpen) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !createTransaction.isPending) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [createTransaction.isPending, isOpen]);
-
-  useEffect(() => {
     if (!isOpen || !investmentId) return;
 
     setNav(
@@ -97,6 +88,11 @@ export function TransactionCreateDialog({
         : "",
     );
   }, [investmentId, isOpen, selectedInvestment?.currentNav]);
+
+  function openDialog() {
+    setTransactionDate(formatDateInput(new Date()));
+    setIsOpen(true);
+  }
 
   function resetForm() {
     setInvestmentId("");
@@ -158,232 +154,108 @@ export function TransactionCreateDialog({
 
   return (
     <>
-      <Button className="w-fit" onClick={() => setIsOpen(true)} type="button">
+      <Button className="w-fit" onClick={openDialog} type="button">
         <PlusIcon className="size-4" weight="bold" />
         {actionLabel}
       </Button>
 
       {isOpen ? (
-        <div
-          aria-labelledby={titleId}
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
-          role="dialog"
+        <DialogShell
+          description={label}
+          isPending={createTransaction.isPending}
+          onClose={closeDialog}
+          title={actionLabel}
         >
-          <div className="border-border bg-card text-card-foreground flex max-h-[min(720px,calc(100vh-2rem))] w-full max-w-lg flex-col border shadow-xl">
-            <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-              <h2 id={titleId} className="text-sm font-semibold">
-                {actionLabel}
-              </h2>
-              <Button
-                aria-label={`Close ${label} dialog`}
-                disabled={createTransaction.isPending}
-                onClick={closeDialog}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon className="size-4" />
-              </Button>
+          <form
+            className="grid gap-4 overflow-auto p-4"
+            onSubmit={handleSubmit}
+          >
+            <SelectField
+              disabled={investmentOptions.length === 0}
+              label="Investment"
+              onChange={setInvestmentId}
+              options={investmentOptions}
+              placeholder={
+                investmentOptions.length > 0
+                  ? "Select investment"
+                  : "No investments found"
+              }
+              value={investmentId}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <InputField
+                label="Date"
+                onChange={setTransactionDate}
+                placeholder="2026-05-01"
+                type="date"
+                value={transactionDate}
+              />
+              <SelectField
+                label="Type"
+                onChange={(value) => setType(value === "sell" ? "sell" : "buy")}
+                options={[
+                  { label: "Buy", value: "buy" },
+                  { label: "Sell", value: "sell" },
+                ]}
+                placeholder="Select type"
+                value={type}
+              />
             </div>
 
-            <form
-              aria-describedby={errorMessage ? errorId : undefined}
-              className="grid gap-4 overflow-auto p-4"
-              onSubmit={handleSubmit}
-            >
-              <SelectField
-                disabled={investmentOptions.length === 0}
-                label="Investment"
-                onChange={setInvestmentId}
-                options={investmentOptions}
-                placeholder={
-                  investmentOptions.length > 0
-                    ? "Select investment"
-                    : "No investments found"
-                }
-                value={investmentId}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <InputField
+                inputMode="decimal"
+                label="Amount"
+                min="0.01"
+                onChange={setAmount}
+                placeholder="25000"
+                step="0.01"
+                type="number"
+                value={amount}
               />
+              <InputField
+                inputMode="decimal"
+                label="Units"
+                min="0.000001"
+                onChange={() => undefined}
+                placeholder="100.596"
+                readOnly
+                step="0.000001"
+                type="number"
+                value={units}
+              />
+              <InputField
+                inputMode="decimal"
+                label="NAV"
+                min="0.0001"
+                onChange={setNav}
+                placeholder="248.52"
+                step="0.0001"
+                type="number"
+                value={nav}
+              />
+            </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <InputField
-                  label="Date"
-                  onChange={setTransactionDate}
-                  placeholder="2026-05-01"
-                  type="date"
-                  value={transactionDate}
-                />
-                <SelectField
-                  label="Type"
-                  onChange={(value) =>
-                    setType(value === "sell" ? "sell" : "buy")
-                  }
-                  options={[
-                    { label: "Buy", value: "buy" },
-                    { label: "Sell", value: "sell" },
-                  ]}
-                  placeholder="Select type"
-                  value={type}
-                />
-              </div>
+            <TextareaField
+              label="Notes"
+              maxLength={1024}
+              onChange={setNotes}
+              placeholder="Monthly SIP"
+              value={notes}
+            />
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <InputField
-                  inputMode="decimal"
-                  label="Amount"
-                  min="0.01"
-                  onChange={setAmount}
-                  placeholder="25000"
-                  step="0.01"
-                  type="number"
-                  value={amount}
-                />
-                <InputField
-                  inputMode="decimal"
-                  label="Units"
-                  min="0.000001"
-                  onChange={() => undefined}
-                  placeholder="100.596"
-                  readOnly
-                  step="0.000001"
-                  type="number"
-                  value={units}
-                />
-                <InputField
-                  inputMode="decimal"
-                  label="NAV"
-                  min="0.0001"
-                  onChange={setNav}
-                  placeholder="248.52"
-                  step="0.0001"
-                  type="number"
-                  value={nav}
-                />
-              </div>
-
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium">Notes</span>
-                <textarea
-                  className="border-input bg-background focus-visible:ring-ring min-h-20 w-full resize-none rounded-sm border px-3 py-2 text-sm outline-none focus-visible:ring-1"
-                  maxLength={1024}
-                  onChange={(event) => setNotes(event.target.value)}
-                  placeholder="Monthly SIP"
-                  value={notes}
-                />
-              </label>
-
-              {errorMessage ? (
-                <p id={errorId} className="text-destructive text-xs">
-                  {errorMessage}
-                </p>
-              ) : null}
-
-              <div className="flex items-center justify-end gap-2 border-t pt-4">
-                <Button
-                  disabled={createTransaction.isPending}
-                  onClick={closeDialog}
-                  type="button"
-                  variant="outline"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  disabled={!isFormValid || createTransaction.isPending}
-                  type="submit"
-                >
-                  <PlusIcon className="size-4" weight="bold" />
-                  {createTransaction.isPending ? "Saving" : actionLabel}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <DialogFooter
+              error={errorMessage}
+              isPending={createTransaction.isPending}
+              isValid={isFormValid}
+              onClose={closeDialog}
+              submitLabel={actionLabel}
+            />
+          </form>
+        </DialogShell>
       ) : null}
     </>
-  );
-}
-
-function InputField({
-  inputMode,
-  label,
-  min,
-  onChange,
-  placeholder,
-  readOnly = false,
-  step,
-  type = "text",
-  value,
-}: {
-  inputMode?: "decimal" | "numeric";
-  label: string;
-  min?: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  readOnly?: boolean;
-  step?: string;
-  type?: string;
-  value: string;
-}) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-xs font-medium">{label}</span>
-      <input
-        className="border-input bg-background focus-visible:ring-ring read-only:bg-muted/50 h-9 w-full rounded-sm border px-3 text-sm outline-none read-only:cursor-default focus-visible:ring-1"
-        inputMode={inputMode}
-        min={min}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        required
-        step={step}
-        type={type}
-        value={value}
-      />
-    </label>
-  );
-}
-
-function SelectField({
-  disabled,
-  label,
-  onChange,
-  options,
-  placeholder,
-  value,
-}: {
-  disabled?: boolean;
-  label: string;
-  onChange: (value: string) => void;
-  options: FieldOption[];
-  placeholder: string;
-  value: string;
-}) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-xs font-medium">{label}</span>
-      <span className="relative block">
-        <select
-          className="border-input bg-background focus-visible:ring-ring h-9 w-full appearance-none rounded-sm border px-3 pr-10 text-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-          required
-          value={value}
-        >
-          <option value="" disabled>
-            {placeholder}
-          </option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <CaretDownIcon
-          aria-hidden="true"
-          className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
-        />
-      </span>
-    </label>
   );
 }
 
@@ -422,4 +294,8 @@ function parseDate(value: string) {
   if (Number.isNaN(date.getTime())) return null;
 
   return date;
+}
+
+function formatDateInput(date: Date) {
+  return date.toISOString().slice(0, 10);
 }

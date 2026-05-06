@@ -81,7 +81,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn(geist.variable, "font-mono", geistMono.variable)}
+      className={cn(geist.variable, "font-sans", geistMono.variable)}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />

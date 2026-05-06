@@ -2,15 +2,22 @@
 
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CaretRightIcon,
+  MagnifyingGlassIcon,
   PencilSimpleIcon,
   TrashIcon,
-  XIcon,
 } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog, DialogShell } from "@/app/_components/dialog-shell";
+import {
+  InputField as SharedInputField,
+  SelectField as SharedSelectField,
+  TextareaField,
+} from "@/app/_components/form-controls";
 import {
   FormattedNumber,
   isNumberDisplayValue,
@@ -97,74 +104,155 @@ type TableTextValue = string | NumberDisplayValue;
 
 type TableCell = TableTextValue | ProgressCell;
 
+type ResourceTableEmptyState = {
+  actionHref?: string;
+  actionLabel?: string;
+  description: string;
+  title: string;
+};
+
 export function ResourceTable({
+  emptyState,
   label,
   rows,
   tableColumns,
 }: {
+  emptyState?: ResourceTableEmptyState;
   label: string;
   rows: TableRow[];
   tableColumns: TableColumn[];
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const hasExpandableRows = rows.some((row) => row.details?.length);
-  const hasActions = rows.some((row) => row.action);
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleRows =
+    normalizedQuery.length > 0
+      ? rows.filter((row) => rowMatchesQuery(row, normalizedQuery))
+      : rows;
+  const hasExpandableRows = visibleRows.some((row) => row.details?.length);
+  const hasActions = visibleRows.some((row) => row.action);
+  const rowCountLabel =
+    normalizedQuery.length > 0
+      ? `${visibleRows.length}/${rows.length} rows`
+      : `${rows.length} rows`;
 
   return (
-    <section className="border-border bg-card text-card-foreground min-w-0 border">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">{label}</h2>
-        <span className="text-muted-foreground text-xs">
-          {rows.length} rows
-        </span>
+    <section className="border-border bg-card text-card-foreground min-w-0 rounded-md border">
+      <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <h2 className="truncate text-sm font-semibold">{label}</h2>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {rowCountLabel}
+          </span>
+        </div>
+        {rows.length > 0 ? (
+          <label className="relative block sm:w-72">
+            <span className="sr-only">Search {label}</span>
+            <MagnifyingGlassIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <input
+              className="border-input bg-background focus-visible:ring-ring h-8 w-full rounded-md border pr-3 pl-9 text-sm outline-none focus-visible:ring-1"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${label.toLowerCase()}`}
+              type="search"
+              value={query}
+            />
+          </label>
+        ) : null}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-muted/50 text-muted-foreground border-b text-xs">
-              {tableColumns.map((column) => (
-                <th
-                  key={column.label}
-                  className={cn(
-                    "px-4 py-2 font-medium",
-                    alignmentClass(column.align),
-                  )}
-                >
-                  {column.label}
-                </th>
-              ))}
-              {hasActions ? (
-                <th className="px-4 py-2 text-right font-medium">Actions</th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const rowKey = row.action
-                ? `${row.action.kind}-${row.action.id}`
-                : row.cells.map(cellToText).join("-");
-              const isExpanded = expandedRow === rowKey;
-              const canExpand = Boolean(row.details?.length);
+      {visibleRows.length > 0 ? (
+        <>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[760px] table-fixed border-collapse text-sm">
+              <thead>
+                <tr className="bg-muted/50 text-muted-foreground border-b text-xs">
+                  {tableColumns.map((column) => (
+                    <th
+                      key={column.label}
+                      className={cn(
+                        "px-4 py-2 font-medium",
+                        alignmentClass(column.align),
+                      )}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
+                  {hasActions ? (
+                    <th className="w-24 px-4 py-2 text-right font-medium">
+                      Actions
+                    </th>
+                  ) : null}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => {
+                  const rowKey = getRowKey(row);
+                  const isExpanded = expandedRow === rowKey;
+                  const canExpand = Boolean(row.details?.length);
 
-              return (
-                <FragmentRow
-                  canExpand={canExpand}
-                  isExpanded={isExpanded}
-                  key={rowKey}
-                  hasActions={hasActions}
-                  onToggle={() =>
-                    setExpandedRow(isExpanded || !canExpand ? null : rowKey)
-                  }
-                  row={row}
-                  tableColumns={tableColumns}
-                  showButton={hasExpandableRows}
-                />
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  return (
+                    <FragmentRow
+                      canExpand={canExpand}
+                      isExpanded={isExpanded}
+                      key={rowKey}
+                      hasActions={hasActions}
+                      onToggle={() =>
+                        setExpandedRow(isExpanded || !canExpand ? null : rowKey)
+                      }
+                      row={row}
+                      tableColumns={tableColumns}
+                      showButton={hasExpandableRows}
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="grid gap-2 p-3 md:hidden">
+            {visibleRows.map((row) => (
+              <MobileResourceCard
+                key={getRowKey(row)}
+                row={row}
+                tableColumns={tableColumns}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <ResourceTableEmptyState
+          emptyState={emptyState}
+          isFiltered={rows.length > 0}
+        />
+      )}
     </section>
+  );
+}
+
+function ResourceTableEmptyState({
+  emptyState,
+  isFiltered,
+}: {
+  emptyState?: ResourceTableEmptyState;
+  isFiltered: boolean;
+}) {
+  const title = isFiltered ? "No matching rows" : emptyState?.title;
+  const description = isFiltered
+    ? "Try a different search term or clear the search field."
+    : emptyState?.description;
+
+  return (
+    <div className="p-4">
+      <div className="border-border bg-muted/20 flex min-h-48 flex-col items-start justify-center rounded-md border border-dashed p-5">
+        <p className="text-sm font-semibold">{title ?? "No rows yet"}</p>
+        <p className="text-muted-foreground mt-1 max-w-xl text-sm leading-6">
+          {description ?? "Add your first record to start tracking this area."}
+        </p>
+        {!isFiltered && emptyState?.actionHref && emptyState.actionLabel ? (
+          <Button asChild className="mt-4" size="sm" variant="outline">
+            <Link href={emptyState.actionHref}>{emptyState.actionLabel}</Link>
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -260,10 +348,100 @@ function FragmentRow({
   );
 }
 
+function MobileResourceCard({
+  row,
+  tableColumns,
+}: {
+  row: TableRow;
+  tableColumns: TableColumn[];
+}) {
+  const [primaryCell, ...secondaryCells] = row.cells;
+  const secondaryColumns = tableColumns.slice(1);
+
+  return (
+    <article
+      className={cn(
+        "border-border bg-background rounded-md border p-3",
+        row.tone === "accent" && "border-primary/30 bg-primary/5",
+        row.tone === "muted" && "text-muted-foreground",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            {primaryCell ? renderCell(primaryCell) : "Record"}
+          </p>
+          {tableColumns[0]?.label ? (
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              {tableColumns[0].label}
+            </p>
+          ) : null}
+        </div>
+        {row.action ? <RowActions action={row.action} /> : null}
+      </div>
+
+      {secondaryCells.length > 0 ? (
+        <dl className="mt-3 grid gap-2">
+          {secondaryCells.map((cell, index) => (
+            <div
+              className="flex items-start justify-between gap-3 border-t pt-2"
+              key={`${cellToText(cell)}-${index}`}
+            >
+              <dt className="text-muted-foreground text-xs">
+                {secondaryColumns[index]?.label ?? "Value"}
+              </dt>
+              <dd className="max-w-[60%] text-right text-sm font-medium">
+                {renderCell(cell)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {row.details?.length ? (
+        <dl className="bg-muted/30 mt-3 grid gap-2 rounded-md p-3">
+          {row.details.map((detail) => (
+            <div
+              className="flex items-start justify-between gap-3"
+              key={detail.label}
+            >
+              <dt className="text-muted-foreground text-xs">{detail.label}</dt>
+              <dd className="max-w-[60%] truncate text-right text-xs font-medium">
+                {renderTextValue(detail.value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </article>
+  );
+}
+
 function renderCell(cell: TableCell) {
   if (isTableTextValue(cell)) return renderTextValue(cell);
 
   return <ProgressCellView cell={cell} />;
+}
+
+function getRowKey(row: TableRow) {
+  return row.action
+    ? `${row.action.kind}-${row.action.id}`
+    : row.cells.map(cellToText).join("-");
+}
+
+function rowMatchesQuery(row: TableRow, query: string) {
+  const searchableText = [
+    ...row.cells.map(cellToText),
+    ...(row.details?.flatMap((detail) => [
+      detail.label,
+      typeof detail.value === "string" ? detail.value : detail.value.value,
+      typeof detail.value === "string" ? "" : detail.value.full,
+    ]) ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return searchableText.includes(query);
 }
 
 function cellToText(cell: TableCell) {
@@ -289,14 +467,14 @@ function ProgressCellView({ cell }: { cell: ProgressCell }) {
   const percent = Math.round(ratio * 100);
 
   return (
-    <div className="ml-auto grid min-w-52 gap-1 text-left">
+    <div className="ml-auto grid w-full max-w-56 min-w-0 gap-1 text-left">
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="font-medium">
           <FormattedNumber value={formatInrMinor(cell.currentMinor)} />
         </span>
         <span className="text-muted-foreground">{percent}%</span>
       </div>
-      <div className="bg-muted h-2 overflow-hidden rounded-none">
+      <div className="bg-muted h-2 overflow-hidden rounded-sm">
         <div className="bg-primary h-full" style={{ width: `${percent}%` }} />
       </div>
       <div className="text-muted-foreground text-xs">
@@ -323,19 +501,21 @@ function AllocationRowActions({
   action: Extract<TableRowAction, { kind: "allocation" }>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
   const utils = api.useUtils();
   const deleteAllocation = api.allocations.delete.useMutation();
 
   async function handleDelete() {
-    if (!window.confirm("Delete this allocation?")) return;
-
+    setDeleteError(null);
     try {
       await deleteAllocation.mutateAsync({ id: action.id });
       await utils.allocations.list.invalidate();
       router.refresh();
+      setIsConfirmingDelete(false);
     } catch (error) {
-      window.alert(
+      setDeleteError(
         error instanceof Error ? error.message : "Allocation delete failed.",
       );
     }
@@ -356,7 +536,7 @@ function AllocationRowActions({
         <Button
           aria-label="Delete allocation"
           disabled={deleteAllocation.isPending}
-          onClick={handleDelete}
+          onClick={() => setIsConfirmingDelete(true)}
           size="icon-xs"
           type="button"
           variant="destructive"
@@ -370,6 +550,18 @@ function AllocationRowActions({
           onClose={() => setIsEditing(false)}
         />
       ) : null}
+      {isConfirmingDelete ? (
+        <ConfirmDialog
+          body="This removes the mapping between the selected investment and goal. The underlying goal, investment, and transactions stay intact."
+          error={deleteError}
+          isPending={deleteAllocation.isPending}
+          onClose={() => {
+            if (!deleteAllocation.isPending) setIsConfirmingDelete(false);
+          }}
+          onConfirm={() => void handleDelete()}
+          title="Delete allocation"
+        />
+      ) : null}
     </>
   );
 }
@@ -380,19 +572,21 @@ function GoalRowActions({
   action: Extract<TableRowAction, { kind: "goal" }>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
   const utils = api.useUtils();
   const deleteGoal = api.goals.delete.useMutation();
 
   async function handleDelete() {
-    if (!window.confirm(`Delete ${action.values.name}?`)) return;
-
+    setDeleteError(null);
     try {
       await deleteGoal.mutateAsync({ id: action.id });
       await utils.goals.list.invalidate();
       router.refresh();
+      setIsConfirmingDelete(false);
     } catch (error) {
-      window.alert(
+      setDeleteError(
         error instanceof Error ? error.message : "Goal delete failed.",
       );
     }
@@ -413,7 +607,7 @@ function GoalRowActions({
         <Button
           aria-label={`Delete ${action.values.name}`}
           disabled={deleteGoal.isPending}
-          onClick={handleDelete}
+          onClick={() => setIsConfirmingDelete(true)}
           size="icon-xs"
           type="button"
           variant="destructive"
@@ -423,6 +617,18 @@ function GoalRowActions({
       </span>
       {isEditing ? (
         <GoalEditDialog action={action} onClose={() => setIsEditing(false)} />
+      ) : null}
+      {isConfirmingDelete ? (
+        <ConfirmDialog
+          body={`Delete ${action.values.name}? Allocations for this goal will also be removed.`}
+          error={deleteError}
+          isPending={deleteGoal.isPending}
+          onClose={() => {
+            if (!deleteGoal.isPending) setIsConfirmingDelete(false);
+          }}
+          onConfirm={() => void handleDelete()}
+          title="Delete goal"
+        />
       ) : null}
     </>
   );
@@ -434,19 +640,21 @@ function InvestmentRowActions({
   action: Extract<TableRowAction, { kind: "investment" }>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
   const utils = api.useUtils();
   const deleteInvestment = api.investments.delete.useMutation();
 
   async function handleDelete() {
-    if (!window.confirm(`Delete ${action.values.name}?`)) return;
-
+    setDeleteError(null);
     try {
       await deleteInvestment.mutateAsync({ id: action.id });
       await utils.investments.list.invalidate();
       router.refresh();
+      setIsConfirmingDelete(false);
     } catch (error) {
-      window.alert(
+      setDeleteError(
         error instanceof Error ? error.message : "Investment delete failed.",
       );
     }
@@ -467,7 +675,7 @@ function InvestmentRowActions({
         <Button
           aria-label={`Delete ${action.values.name}`}
           disabled={deleteInvestment.isPending}
-          onClick={handleDelete}
+          onClick={() => setIsConfirmingDelete(true)}
           size="icon-xs"
           type="button"
           variant="destructive"
@@ -481,6 +689,18 @@ function InvestmentRowActions({
           onClose={() => setIsEditing(false)}
         />
       ) : null}
+      {isConfirmingDelete ? (
+        <ConfirmDialog
+          body={`Delete ${action.values.name}? Transactions and allocations for this investment will also be removed.`}
+          error={deleteError}
+          isPending={deleteInvestment.isPending}
+          onClose={() => {
+            if (!deleteInvestment.isPending) setIsConfirmingDelete(false);
+          }}
+          onConfirm={() => void handleDelete()}
+          title="Delete investment"
+        />
+      ) : null}
     </>
   );
 }
@@ -491,19 +711,21 @@ function TransactionRowActions({
   action: Extract<TableRowAction, { kind: "transaction" }>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
   const utils = api.useUtils();
   const deleteTransaction = api.transactions.delete.useMutation();
 
   async function handleDelete() {
-    if (!window.confirm("Delete this transaction?")) return;
-
+    setDeleteError(null);
     try {
       await deleteTransaction.mutateAsync({ id: action.id });
       await utils.transactions.list.invalidate();
       router.refresh();
+      setIsConfirmingDelete(false);
     } catch (error) {
-      window.alert(
+      setDeleteError(
         error instanceof Error ? error.message : "Transaction delete failed.",
       );
     }
@@ -524,7 +746,7 @@ function TransactionRowActions({
         <Button
           aria-label="Delete transaction"
           disabled={deleteTransaction.isPending}
-          onClick={handleDelete}
+          onClick={() => setIsConfirmingDelete(true)}
           size="icon-xs"
           type="button"
           variant="destructive"
@@ -536,6 +758,18 @@ function TransactionRowActions({
         <TransactionEditDialog
           action={action}
           onClose={() => setIsEditing(false)}
+        />
+      ) : null}
+      {isConfirmingDelete ? (
+        <ConfirmDialog
+          body="Delete this ledger entry? Portfolio values and returns will update after it is removed."
+          error={deleteError}
+          isPending={deleteTransaction.isPending}
+          onClose={() => {
+            if (!deleteTransaction.isPending) setIsConfirmingDelete(false);
+          }}
+          onConfirm={() => void handleDelete()}
+          title="Delete transaction"
         />
       ) : null}
     </>
@@ -984,16 +1218,13 @@ function TransactionEditDialog({
           />
         </div>
 
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium">Notes</span>
-          <textarea
-            className="border-input bg-background focus-visible:ring-ring min-h-20 w-full resize-none rounded-sm border px-3 py-2 text-sm outline-none focus-visible:ring-1"
-            maxLength={1024}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="Monthly SIP"
-            value={notes}
-          />
-        </label>
+        <TextareaField
+          label="Notes"
+          maxLength={1024}
+          onChange={setNotes}
+          placeholder="Monthly SIP"
+          value={notes}
+        />
 
         <EditDialogFooter
           error={formError ?? updateTransaction.error?.message}
@@ -1018,28 +1249,9 @@ function EditDialogShell({
   title: string;
 }) {
   return (
-    <div
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
-      role="dialog"
-    >
-      <div className="border-border bg-card text-card-foreground flex max-h-[min(720px,calc(100vh-2rem))] w-full max-w-lg flex-col border text-left shadow-xl">
-        <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <Button
-            aria-label={`Close ${title}`}
-            disabled={isPending}
-            onClick={onClose}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <XIcon className="size-4" />
-          </Button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <DialogShell isPending={isPending} onClose={onClose} title={title}>
+      {children}
+    </DialogShell>
   );
 }
 
@@ -1065,21 +1277,17 @@ function TextField({
   value: string;
 }) {
   return (
-    <label className="grid gap-1.5">
-      <span className="text-xs font-medium">{label}</span>
-      <input
-        autoFocus={autoFocus}
-        className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
-        inputMode={inputMode}
-        min={min}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        required
-        step={step}
-        type={type}
-        value={value}
-      />
-    </label>
+    <SharedInputField
+      autoFocus={autoFocus}
+      inputMode={inputMode}
+      label={label}
+      min={min}
+      onChange={onChange}
+      placeholder={placeholder}
+      step={step}
+      type={type}
+      value={value}
+    />
   );
 }
 
@@ -1099,25 +1307,14 @@ function SelectField({
   value: string;
 }) {
   return (
-    <label className="grid gap-1.5">
-      <span className="text-xs font-medium">{label}</span>
-      <select
-        className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        required
-        value={value}
-      >
-        <option value="" disabled>
-          {placeholder}
-        </option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <SharedSelectField
+      disabled={disabled}
+      label={label}
+      onChange={onChange}
+      options={options}
+      placeholder={placeholder}
+      value={value}
+    />
   );
 }
 

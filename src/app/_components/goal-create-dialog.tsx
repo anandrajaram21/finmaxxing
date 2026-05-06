@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { PlusIcon, XIcon } from "@phosphor-icons/react";
+import { PlusIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
+import { DialogFooter, DialogShell } from "@/app/_components/dialog-shell";
+import { InputField } from "@/app/_components/form-controls";
 import { api } from "@/trpc/react";
 
 type GoalCreateDialogProps = {
@@ -23,8 +25,6 @@ export function GoalCreateDialog({
   const [targetYear, setTargetYear] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
-  const titleId = useId();
-  const errorId = useId();
   const utils = api.useUtils();
   const createGoal = api.goals.create.useMutation();
 
@@ -51,19 +51,6 @@ export function GoalCreateDialog({
     targetAmountMinor !== null &&
     targetYearValue !== null;
   const errorMessage = formError ?? createGoal.error?.message;
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !createGoal.isPending) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [createGoal.isPending, isOpen]);
 
   function resetForm() {
     setName("");
@@ -119,103 +106,52 @@ export function GoalCreateDialog({
       </Button>
 
       {isOpen ? (
-        <div
-          aria-labelledby={titleId}
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
-          role="dialog"
+        <DialogShell
+          description={label}
+          isPending={createGoal.isPending}
+          onClose={closeDialog}
+          title={actionLabel}
         >
-          <div className="border-border bg-card text-card-foreground flex max-h-[min(720px,calc(100vh-2rem))] w-full max-w-lg flex-col border shadow-xl">
-            <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-              <h2 id={titleId} className="text-sm font-semibold">
-                {actionLabel}
-              </h2>
-              <Button
-                aria-label={`Close ${label} dialog`}
-                disabled={createGoal.isPending}
-                onClick={closeDialog}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon className="size-4" />
-              </Button>
-            </div>
-
-            <form
-              aria-describedby={errorMessage ? errorId : undefined}
-              className="grid gap-4 overflow-auto p-4"
-              onSubmit={handleSubmit}
-            >
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium">Goal name</span>
-                <input
-                  autoFocus
-                  className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
-                  name="name"
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Retirement corpus"
-                  required
-                  type="text"
-                  value={name}
-                />
-              </label>
-
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium">Target amount</span>
-                <input
-                  className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
-                  inputMode="decimal"
-                  min="1"
-                  name="targetAmount"
-                  onChange={(event) => setTargetAmount(event.target.value)}
-                  placeholder="5000000"
-                  required
-                  step="0.01"
-                  type="number"
-                  value={targetAmount}
-                />
-              </label>
-
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium">Target year</span>
-                <input
-                  className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
-                  inputMode="numeric"
-                  min="1"
-                  name="targetYear"
-                  onChange={(event) => setTargetYear(event.target.value)}
-                  placeholder="2034"
-                  required
-                  step="1"
-                  type="number"
-                  value={targetYear}
-                />
-              </label>
-
-              {errorMessage ? (
-                <p id={errorId} className="text-destructive text-xs">
-                  {errorMessage}
-                </p>
-              ) : null}
-
-              <div className="flex items-center justify-end gap-2 border-t pt-4">
-                <Button
-                  disabled={createGoal.isPending}
-                  onClick={closeDialog}
-                  type="button"
-                  variant="outline"
-                >
-                  Cancel
-                </Button>
-                <Button disabled={!isFormValid || createGoal.isPending}>
-                  <PlusIcon className="size-4" weight="bold" />
-                  {createGoal.isPending ? "Saving" : actionLabel}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+          <form
+            className="grid gap-4 overflow-auto p-4"
+            onSubmit={handleSubmit}
+          >
+            <InputField
+              autoFocus
+              label="Goal name"
+              onChange={setName}
+              placeholder="Retirement corpus"
+              value={name}
+            />
+            <InputField
+              inputMode="decimal"
+              label="Target amount"
+              min="1"
+              onChange={setTargetAmount}
+              placeholder="5000000"
+              step="0.01"
+              type="number"
+              value={targetAmount}
+            />
+            <InputField
+              inputMode="numeric"
+              label="Target year"
+              min="1"
+              onChange={setTargetYear}
+              placeholder="2034"
+              step="1"
+              type="number"
+              value={targetYear}
+            />
+            <DialogFooter
+              error={errorMessage}
+              isPending={createGoal.isPending}
+              isValid={isFormValid}
+              onClose={closeDialog}
+              submitLabel={actionLabel}
+            />
+          </form>
+        </DialogShell>
       ) : null}
     </>
   );

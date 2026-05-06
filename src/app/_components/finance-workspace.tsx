@@ -1,13 +1,10 @@
 import { revalidatePath } from "next/cache";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ArrowsSplitIcon,
   BookOpenTextIcon,
   ChartLineUpIcon,
-  CurrencyInrIcon,
   ReceiptIcon,
   SlidersHorizontalIcon,
   TargetIcon,
@@ -28,23 +25,23 @@ import {
   getInvestmentMarketQuotes,
   type InvestmentMarketQuote,
 } from "@/server/yahoo-finance";
-import { cn } from "@/lib/utils";
-import { AuthAction } from "./auth-action";
+import {
+  getSetupProgress,
+  type SetupStepState,
+} from "@/server/finance/setup-state";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
-import { DataBackupActions } from "./data-backup-actions";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
-import { MobileSidebarMenu } from "./mobile-sidebar-menu";
-import {
-  FormattedNumber,
-  isNumberDisplayValue,
-  numberDisplay,
-  type NumberDisplayValue,
-} from "./number-popover";
-import { ThemeToggle } from "./theme-toggle";
+import { numberDisplay, type NumberDisplayValue } from "./number-popover";
 import { TransactionCreateDialog } from "./transaction-create-dialog";
 import { ResourceDialog } from "./resource-dialog";
 import { ResourceTable, type TableRowAction } from "./resource-table";
+import {
+  MetricStrip,
+  WorkspacePageHeader,
+  WorkspaceShell,
+  type Metric,
+} from "./workspace-shell";
 
 export type SectionKey =
   | "dashboard"
@@ -69,8 +66,10 @@ type Field = {
 };
 
 type FieldOption = {
+  allocatedPercent?: number;
   currentNav?: number | null;
   label: string;
+  monthlySipMinor?: number;
   value: string;
 };
 
@@ -102,11 +101,7 @@ type TableRow = {
   tone?: "normal" | "muted" | "accent";
 };
 
-type Stat = {
-  label: string;
-  value: string | NumberDisplayValue;
-  detail: string;
-};
+type Stat = Metric;
 
 type Section = {
   key: SectionKey;
@@ -475,8 +470,6 @@ const sections: Record<SectionKey, Section> = {
   },
 };
 
-const navItems = Object.values(sections);
-
 type SectionData = {
   rows: TableRow[];
   stats: Stat[];
@@ -653,6 +646,7 @@ export async function FinanceWorkspace({
   if (!session?.user?.id) redirect("/?auth=required");
 
   const workspaceData = await getWorkspaceData(sectionKey);
+  const setupProgress = await getSetupProgress(session.user.id);
   const section = {
     ...sections[sectionKey],
     ...workspaceData.sections[sectionKey],
@@ -661,52 +655,31 @@ export async function FinanceWorkspace({
     ...fieldOptions?.[sectionKey],
     ...workspaceData.fieldOptions[sectionKey],
   };
-
-  return (
-    <main className="bg-background text-foreground h-screen overflow-hidden">
-      <div className="flex h-full w-full flex-col lg:flex-row">
-        <Sidebar activeKey={sectionKey} />
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto">
-          <div className="relative min-h-full overflow-hidden">
-            <WorkspaceBackdrop />
-            <div className="relative">
-              <WorkspaceHeader
-                fieldOptions={sectionFieldOptions}
-                section={section}
-              />
-              <section className="space-y-6 px-4 py-5 sm:px-6 lg:px-10">
-                <StatsGrid stats={section.stats} />
-                <ResourceTable
-                  label={section.label}
-                  rows={section.rows}
-                  tableColumns={section.tableColumns}
-                />
-              </section>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
-}
-
-export function WorkspaceBackdrop() {
-  return (
-    <div
-      aria-hidden="true"
-      className="absolute inset-x-0 top-0 h-80 bg-[linear-gradient(180deg,oklch(0.955_0.028_178),transparent)] dark:bg-[linear-gradient(180deg,oklch(0.255_0.04_212),transparent)]"
+  const emptyState = getSectionEmptyState(section.key, setupProgress.nextStep);
+  const renderAction = () => (
+    <WorkspaceCreateAction
+      fieldOptions={sectionFieldOptions}
+      section={section}
     />
   );
-}
 
-export function WorkspaceContent({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-0 min-w-0 flex-1 overflow-auto">
-      <div className="relative min-h-full overflow-hidden">
-        <WorkspaceBackdrop />
-        <div className="relative">{children}</div>
-      </div>
-    </div>
+    <WorkspaceShell activeKey={sectionKey} action={renderAction()}>
+      <WorkspacePageHeader
+        action={renderAction()}
+        description={section.description}
+        eyebrow={section.eyebrow}
+        icon={section.icon}
+        title={section.title}
+      />
+      <MetricStrip metrics={section.stats} />
+      <ResourceTable
+        emptyState={emptyState}
+        label={section.label}
+        rows={section.rows}
+        tableColumns={section.tableColumns}
+      />
+    </WorkspaceShell>
   );
 }
 
@@ -1020,8 +993,10 @@ async function getWorkspaceData(
       : 0;
 
   const investmentOptions = investmentsWithMarketQuotes.map((investment) => ({
+    allocatedPercent: allocatedPercentByInvestment.get(investment.id) ?? 0,
     currentNav: investment.currentNav,
     label: investment.name,
+    monthlySipMinor: investment.monthlySipMinor,
     value: String(investment.id),
   }));
   const goalOptions = goalRows.map((goal) => ({
@@ -1673,193 +1648,123 @@ function toTitleCase(value: string) {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
-  const session = await getSession();
-
-  return (
-    <aside className="border-border bg-sidebar/70 flex w-full shrink-0 flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
-      <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:block lg:border-b">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
-            <CurrencyInrIcon className="size-5" weight="bold" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold tracking-wide">
-              Finmaxxing
-            </span>
-            <span className="text-muted-foreground block text-xs">
-              Portfolio workspace
-            </span>
-          </span>
-        </Link>
-        <MobileSidebarMenu>
-          <nav className="grid gap-1 p-2">
-            {navItems.map((item) => (
-              <SidebarNavLink
-                activeKey={activeKey}
-                item={item}
-                key={item.key}
-              />
-            ))}
-          </nav>
-          <div className="border-t p-3">
-            <div className="mb-3">
-              <ThemeToggle />
-            </div>
-            <AuthPanel session={session} />
-          </div>
-        </MobileSidebarMenu>
-      </div>
-
-      <nav className="hidden gap-1 p-3 lg:grid">
-        {navItems.map((item) => (
-          <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
-        ))}
-      </nav>
-
-      <div className="mt-auto hidden border-t p-3 lg:block lg:shrink-0">
-        <div className="mb-3">
-          <ThemeToggle />
-        </div>
-        <AuthPanel session={session} />
-      </div>
-    </aside>
-  );
-}
-
-function SidebarNavLink({
-  activeKey,
-  item,
-}: {
-  activeKey: SectionKey;
-  item: Section;
-}) {
-  const Icon = item.icon;
-  const isActive = item.key === activeKey;
-
-  return (
-    <Link
-      href={item.href}
-      className={cn(
-        "flex h-10 items-center gap-2 rounded-sm px-3 text-sm transition",
-        isActive
-          ? "bg-sidebar-primary text-sidebar-primary-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-      )}
-    >
-      <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
-      <span>{item.label}</span>
-    </Link>
-  );
-}
-
-function AuthPanel({
-  session,
-}: {
-  session: Awaited<ReturnType<typeof getSession>>;
-}) {
-  return session ? (
-    <div className="space-y-3">
-      <div>
-        <p className="truncate text-sm font-medium">
-          {session.user?.name ?? "Signed in"}
-        </p>
-        <p className="text-muted-foreground truncate text-xs">
-          {session.user?.email}
-        </p>
-      </div>
-      <DataBackupActions />
-      <AuthAction className="w-full" signedIn />
-    </div>
-  ) : (
-    <div className="space-y-3">
-      <p className="text-muted-foreground text-xs">
-        Sign in to save portfolio records to your account.
-      </p>
-      <AuthAction callbackURL="/goals" className="w-full" signedIn={false} />
-    </div>
-  );
-}
-
-function WorkspaceHeader({
+function WorkspaceCreateAction({
   fieldOptions,
   section,
 }: {
   fieldOptions?: Partial<Record<string, FieldOption[]>>;
   section: WorkspaceSection;
 }) {
-  const Icon = section.icon;
   const action = sectionActions[section.key];
 
+  if (section.key === "goals") {
+    return (
+      <GoalCreateDialog
+        actionLabel={section.actionLabel}
+        label={section.label}
+      />
+    );
+  }
+
+  if (section.key === "investments") {
+    return (
+      <InvestmentCreateDialog
+        actionLabel={section.actionLabel}
+        label={section.label}
+      />
+    );
+  }
+
+  if (section.key === "transactions") {
+    return (
+      <TransactionCreateDialog
+        actionLabel={section.actionLabel}
+        investmentOptions={fieldOptions?.investmentId ?? []}
+        label={section.label}
+      />
+    );
+  }
+
+  if (section.key === "allocations") {
+    return (
+      <AllocationCreateDialog
+        actionLabel={section.actionLabel}
+        goalOptions={fieldOptions?.goalId ?? []}
+        investmentOptions={fieldOptions?.investmentId ?? []}
+        label={section.label}
+      />
+    );
+  }
+
   return (
-    <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
-      <div className="min-w-0">
-        <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-          <Icon className="size-4" weight="bold" />
-          <span>{section.eyebrow}</span>
-        </div>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
-          {section.title}
-        </h1>
-        <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-          {section.description}
-        </p>
-      </div>
-      {section.key === "goals" ? (
-        <GoalCreateDialog
-          actionLabel={section.actionLabel}
-          label={section.label}
-        />
-      ) : section.key === "investments" ? (
-        <InvestmentCreateDialog
-          actionLabel={section.actionLabel}
-          label={section.label}
-        />
-      ) : section.key === "transactions" ? (
-        <TransactionCreateDialog
-          actionLabel={section.actionLabel}
-          investmentOptions={fieldOptions?.investmentId ?? []}
-          label={section.label}
-        />
-      ) : section.key === "allocations" ? (
-        <AllocationCreateDialog
-          actionLabel={section.actionLabel}
-          goalOptions={fieldOptions?.goalId ?? []}
-          investmentOptions={fieldOptions?.investmentId ?? []}
-          label={section.label}
-        />
-      ) : (
-        <ResourceDialog
-          action={action}
-          actionLabel={section.actionLabel}
-          fieldOptions={fieldOptions}
-          fields={section.fields}
-          label={section.label}
-        />
-      )}
-    </header>
+    <ResourceDialog
+      action={action}
+      actionLabel={section.actionLabel}
+      fieldOptions={fieldOptions}
+      fields={section.fields}
+      label={section.label}
+    />
   );
 }
 
-function StatsGrid({ stats }: { stats: Stat[] }) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="border-border bg-card text-card-foreground px-4 py-3"
-        >
-          <p className="text-muted-foreground text-xs">{stat.label}</p>
-          <p className="mt-1 text-2xl font-semibold tracking-normal">
-            {isNumberDisplayValue(stat.value) ? (
-              <FormattedNumber value={stat.value} />
-            ) : (
-              stat.value
-            )}
-          </p>
-          <p className="text-muted-foreground mt-1 text-xs">{stat.detail}</p>
-        </div>
-      ))}
-    </div>
-  );
+function getSectionEmptyState(
+  sectionKey: WorkspaceSectionKey,
+  nextStep: SetupStepState | null,
+) {
+  const nextAction =
+    nextStep && !nextStep.disabled
+      ? {
+          actionHref: nextStep.href,
+          actionLabel: nextStep.actionLabel,
+        }
+      : null;
+  const fallback = {
+    actionHref: sections[sectionKey].href,
+    actionLabel: sections[sectionKey].actionLabel,
+    description: sections[sectionKey].description,
+    title: `No ${sections[sectionKey].label.toLowerCase()} yet`,
+  };
+
+  if (!nextStep) return fallback;
+
+  const emptyStates: Record<
+    WorkspaceSectionKey,
+    {
+      actionHref: string;
+      actionLabel: string;
+      description: string;
+      title: string;
+    }
+  > = {
+    allocations: {
+      actionHref: nextAction?.actionHref ?? "/allocations",
+      actionLabel: nextAction?.actionLabel ?? "Map allocations",
+      description:
+        "Allocations connect each investment to the goals it funds. Add goals and investments first, then map percentages.",
+      title: "Map investments to goals",
+    },
+    goals: {
+      actionHref: nextAction?.actionHref ?? "/goals",
+      actionLabel: nextAction?.actionLabel ?? "Add goal",
+      description:
+        "Goals turn your plan into targets. Add the amount in today's money and the year you need it.",
+      title: "Start with a financial target",
+    },
+    investments: {
+      actionHref: nextAction?.actionHref ?? "/investments",
+      actionLabel: nextAction?.actionLabel ?? "Add investment",
+      description:
+        "Add each fund, ETF, stock, or cash bucket with the Yahoo Finance ticker and monthly SIP.",
+      title: "Create your investment universe",
+    },
+    transactions: {
+      actionHref: nextAction?.actionHref ?? "/transactions",
+      actionLabel: nextAction?.actionLabel ?? "Add transaction",
+      description:
+        "Transactions create units, invested value, current value, and XIRR. Add an investment before recording activity.",
+      title: "Record activity to unlock performance",
+    },
+  };
+
+  return emptyStates[sectionKey] ?? fallback;
 }

@@ -13,8 +13,17 @@ import {
   numberDisplay,
   type NumberDisplayValue,
 } from "@/app/_components/number-popover";
-import { Sidebar, WorkspaceContent } from "@/app/_components/finance-workspace";
+import {
+  MetricStrip,
+  StatusBadge,
+  WorkspacePageHeader,
+  WorkspaceShell,
+} from "@/app/_components/workspace-shell";
 import { getSession } from "@/server/better-auth/server";
+import {
+  getSetupProgress,
+  type SetupProgress,
+} from "@/server/finance/setup-state";
 import { db } from "@/server/db";
 import {
   allocations,
@@ -28,259 +37,250 @@ import { cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const data = await getDashboardData();
+  const nextStep = data.setupProgress.nextStep;
+  const primaryActionHref = nextStep?.href ?? "/transactions";
+  const primaryActionLabel = nextStep?.actionLabel ?? "Add activity";
+  const primaryAction = (
+    <Button asChild size="sm">
+      <Link href={primaryActionHref}>
+        {primaryActionLabel}
+        <ArrowRightIcon className="size-4" weight="bold" />
+      </Link>
+    </Button>
+  );
 
   return (
-    <main className="bg-background text-foreground h-screen overflow-hidden">
-      <div className="flex h-full w-full flex-col lg:flex-row">
-        <Sidebar activeKey="dashboard" />
-        <WorkspaceContent>
-          <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
-            <section>
-              <div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-                    <TrendUpIcon className="size-4" weight="bold" />
-                    Dashboard
-                  </div>
-                  <h1 className="mt-3 text-3xl font-semibold tracking-normal text-balance sm:text-4xl lg:text-5xl">
-                    Money map for the next big decisions.
-                  </h1>
-                  <p className="text-muted-foreground mt-3 max-w-2xl text-sm leading-6">
-                    A compact view of goal pressure, portfolio momentum, monthly
-                    flow, and the records that need attention.
-                  </p>
-                </div>
-                <Button asChild size="lg" variant="outline">
-                  <Link href="/transactions">
-                    Add activity
-                    <ReceiptIcon className="size-4" weight="bold" />
-                  </Link>
-                </Button>
-              </div>
+    <WorkspaceShell activeKey="dashboard" action={primaryAction}>
+      <WorkspacePageHeader
+        action={primaryAction}
+        description="Setup, portfolio value, monthly flow, and the records that need attention."
+        eyebrow="Overview"
+        icon={TrendUpIcon}
+        title="Dashboard"
+      />
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {data.metrics.map((metric) => (
+      {nextStep ? (
+        <SetupPanel progress={data.setupProgress} />
+      ) : (
+        <div className="border-border bg-card text-card-foreground mb-4 rounded-md border p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">Portfolio ready</h2>
+                <StatusBadge tone="good">Setup complete</StatusBadge>
+              </div>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Review the numbers, record activity, and adjust allocations as
+                your plan changes.
+              </p>
+            </div>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/transactions">
+                Add activity
+                <ReceiptIcon className="size-4" weight="bold" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <MetricStrip metrics={data.metrics} />
+
+      <section className="grid gap-4 pb-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+        <div className="space-y-6">
+          <div className="border-border bg-card text-card-foreground rounded-md border">
+            <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold">Monthly trajectory</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Planned SIP momentum
+                </p>
+              </div>
+              <p className="text-2xl font-semibold tracking-normal">
+                {renderNumberValue(data.monthlySip)}
+              </p>
+            </div>
+            {data.monthlyBars.length > 0 ? (
+              <div className="flex h-64 items-end gap-2 px-4 py-5">
+                {data.monthlyBars.map((bar) => (
                   <div
-                    className="border-border bg-card/90 text-card-foreground border px-4 py-4 shadow-[0_16px_48px_oklch(0_0_0/0.07)] backdrop-blur"
-                    key={metric.label}
+                    className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2"
+                    key={bar.label}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-muted-foreground text-xs">
-                        {metric.label}
-                      </p>
-                      <span className={cn("size-2", metric.dot)} />
+                    <div className="bg-muted relative min-h-8 overflow-hidden">
+                      <div
+                        className="absolute inset-x-0 bottom-0 bg-teal-500"
+                        style={{ height: `${bar.value}%` }}
+                      />
                     </div>
-                    <p className="mt-3 text-3xl font-semibold tracking-normal">
-                      {renderNumberValue(metric.value)}
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-xs">
-                      {metric.detail}
+                    <p className="text-muted-foreground truncate text-center text-xs">
+                      {bar.label}
                     </p>
                   </div>
                 ))}
               </div>
-            </section>
-
-            <section className="mt-6 grid gap-6 pb-8 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
-              <div className="space-y-6">
-                <div className="border-border bg-card text-card-foreground border">
-                  <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Monthly trajectory
-                      </p>
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        Planned SIP momentum
-                      </p>
-                    </div>
-                    <p className="text-2xl font-semibold tracking-normal">
-                      {renderNumberValue(data.monthlySip)}
-                    </p>
-                  </div>
-                  {data.monthlyBars.length > 0 ? (
-                    <div className="flex h-64 items-end gap-2 px-4 py-5">
-                      {data.monthlyBars.map((bar) => (
-                        <div
-                          className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2"
-                          key={bar.label}
-                        >
-                          <div className="bg-muted relative min-h-8 overflow-hidden">
-                            <div
-                              className="absolute inset-x-0 bottom-0 bg-teal-500"
-                              style={{ height: `${bar.value}%` }}
-                            />
-                          </div>
-                          <p className="text-muted-foreground truncate text-center text-xs">
-                            {bar.label}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      actionHref="/transactions"
-                      actionLabel="Add transaction"
-                      title="No transaction history yet"
-                    />
-                  )}
-                </div>
-
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="border-border bg-card text-card-foreground border">
-                    <div className="border-b px-4 py-3">
-                      <p className="text-sm font-semibold">Goal funding</p>
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        SIP allocation by target
-                      </p>
-                    </div>
-                    {data.allocationRows.length > 0 ? (
-                      <div className="space-y-4 p-4">
-                        {data.allocationRows.map((row) => (
-                          <div key={row.label}>
-                            <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                              <span className="truncate">{row.label}</span>
-                              <span className="text-muted-foreground shrink-0">
-                                {renderNumberValue(row.amount)}
-                              </span>
-                            </div>
-                            <div className="bg-muted h-2 overflow-hidden">
-                              <div
-                                className="h-full bg-indigo-500"
-                                style={{
-                                  width: `${Math.min(100, Math.max(row.value, 6))}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyState
-                        actionHref="/allocations"
-                        actionLabel="Map allocations"
-                        title="No goal allocations yet"
-                      />
-                    )}
-                  </div>
-
-                  <div className="border-border bg-card text-card-foreground border">
-                    <div className="border-b px-4 py-3">
-                      <p className="text-sm font-semibold">Setup health</p>
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        Data needed for useful projections
-                      </p>
-                    </div>
-                    <div className="grid gap-2 p-4">
-                      {data.checklist.map((item) => (
-                        <div
-                          className="border-border flex items-center justify-between gap-3 border px-3 py-2"
-                          key={item.label}
-                        >
-                          <span className="truncate text-sm">{item.label}</span>
-                          <span
-                            className={cn(
-                              "px-2 py-1 text-xs font-medium",
-                              item.done
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                : "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-                            )}
-                          >
-                            {item.done ? "Done" : "Needs data"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="border-border bg-card text-card-foreground border">
-                  <div className="border-b px-4 py-3">
-                    <p className="text-sm font-semibold">Closest goals</p>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      Sorted by target year
-                    </p>
-                  </div>
-                  {data.goalRows.length > 0 ? (
-                    <div className="divide-border divide-y">
-                      {data.goalRows.map((goal) => (
-                        <div
-                          className="flex items-center justify-between gap-4 px-4 py-3"
-                          key={goal.label}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {goal.label}
-                            </p>
-                            <p className="text-muted-foreground mt-1 text-xs">
-                              {goal.year}
-                            </p>
-                          </div>
-                          <p className="shrink-0 text-sm font-semibold">
-                            {renderNumberValue(goal.amount)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      actionHref="/goals"
-                      actionLabel="Add goal"
-                      title="No goals yet"
-                    />
-                  )}
-                </div>
-
-                <div className="border-border bg-card text-card-foreground border">
-                  <div className="border-b px-4 py-3">
-                    <p className="text-sm font-semibold">Recent activity</p>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      Latest ledger entries
-                    </p>
-                  </div>
-                  {data.recentRows.length > 0 ? (
-                    <div className="divide-border divide-y">
-                      {data.recentRows.map((row) => (
-                        <div
-                          className="flex items-center justify-between gap-4 px-4 py-3"
-                          key={`${row.date}-${row.label}-${row.type}`}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {row.label}
-                            </p>
-                            <p className="text-muted-foreground mt-1 text-xs">
-                              {row.date}
-                            </p>
-                          </div>
-                          <p
-                            className={cn(
-                              "shrink-0 text-sm font-semibold",
-                              row.type === "sell"
-                                ? "text-amber-700 dark:text-amber-300"
-                                : "text-emerald-700 dark:text-emerald-300",
-                            )}
-                          >
-                            {renderNumberValue(row.amount)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      actionHref="/transactions"
-                      actionLabel="Add transaction"
-                      title="No recent activity"
-                    />
-                  )}
-                </div>
-              </div>
-            </section>
+            ) : (
+              <EmptyState
+                actionHref="/transactions"
+                actionLabel="Add transaction"
+                title="No transaction history yet"
+              />
+            )}
           </div>
-        </WorkspaceContent>
-      </div>
-    </main>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="border-border bg-card text-card-foreground rounded-md border">
+              <div className="border-b px-4 py-3">
+                <p className="text-sm font-semibold">Goal funding</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  SIP allocation by target
+                </p>
+              </div>
+              {data.allocationRows.length > 0 ? (
+                <div className="space-y-4 p-4">
+                  {data.allocationRows.map((row) => (
+                    <div key={row.label}>
+                      <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                        <span className="truncate">{row.label}</span>
+                        <span className="text-muted-foreground shrink-0">
+                          {renderNumberValue(row.amount)}
+                        </span>
+                      </div>
+                      <div className="bg-muted h-2 overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-500"
+                          style={{
+                            width: `${Math.min(100, Math.max(row.value, 6))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  actionHref="/allocations"
+                  actionLabel="Map allocations"
+                  title="No goal allocations yet"
+                />
+              )}
+            </div>
+
+            <div className="border-border bg-card text-card-foreground rounded-md border">
+              <div className="border-b px-4 py-3">
+                <p className="text-sm font-semibold">Setup health</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Data needed for useful projections
+                </p>
+              </div>
+              <div className="grid gap-2 p-4">
+                {data.checklist.map((item) => (
+                  <div
+                    className="border-border flex items-center justify-between gap-3 border px-3 py-2"
+                    key={item.label}
+                  >
+                    <span className="truncate text-sm">{item.label}</span>
+                    <span
+                      className={cn(
+                        "px-2 py-1 text-xs font-medium",
+                        item.done
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                      )}
+                    >
+                      {item.done ? "Done" : "Needs data"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="border-border bg-card text-card-foreground rounded-md border">
+            <div className="border-b px-4 py-3">
+              <p className="text-sm font-semibold">Closest goals</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Sorted by target year
+              </p>
+            </div>
+            {data.goalRows.length > 0 ? (
+              <div className="divide-border divide-y">
+                {data.goalRows.map((goal) => (
+                  <div
+                    className="flex items-center justify-between gap-4 px-4 py-3"
+                    key={goal.label}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {goal.label}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {goal.year}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold">
+                      {renderNumberValue(goal.amount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                actionHref="/goals"
+                actionLabel="Add goal"
+                title="No goals yet"
+              />
+            )}
+          </div>
+
+          <div className="border-border bg-card text-card-foreground rounded-md border">
+            <div className="border-b px-4 py-3">
+              <p className="text-sm font-semibold">Recent activity</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Latest ledger entries
+              </p>
+            </div>
+            {data.recentRows.length > 0 ? (
+              <div className="divide-border divide-y">
+                {data.recentRows.map((row) => (
+                  <div
+                    className="flex items-center justify-between gap-4 px-4 py-3"
+                    key={`${row.date}-${row.label}-${row.type}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {row.label}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {row.date}
+                      </p>
+                    </div>
+                    <p
+                      className={cn(
+                        "shrink-0 text-sm font-semibold",
+                        row.type === "sell"
+                          ? "text-amber-700 dark:text-amber-300"
+                          : "text-emerald-700 dark:text-emerald-300",
+                      )}
+                    >
+                      {renderNumberValue(row.amount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                actionHref="/transactions"
+                actionLabel="Add transaction"
+                title="No recent activity"
+              />
+            )}
+          </div>
+        </div>
+      </section>
+    </WorkspaceShell>
   );
 }
 
@@ -291,12 +291,14 @@ async function getDashboardData() {
   if (!userId) redirect("/?auth=required");
 
   const [
+    setupProgress,
     assumptionRows,
     goalRows,
     investmentRows,
     allocationRows,
     transactionRows,
   ] = await Promise.all([
+    getSetupProgress(userId),
     db
       .select()
       .from(portfolioAssumptions)
@@ -432,33 +434,92 @@ async function getDashboardData() {
     metrics: [
       {
         detail: `${goalRows.length} active targets`,
-        dot: "bg-teal-500",
         label: "Goal corpus",
+        tone: "accent" as const,
         value: formatMoney(totalGoalMinor),
       },
       {
         detail: `${investmentRows.length} instruments`,
-        dot: "bg-cyan-500",
         label: "Current value",
+        tone: currentValueMinor > 0 ? ("good" as const) : ("warning" as const),
         value: currentValueMinor > 0 ? formatMoney(currentValueMinor) : "n/a",
       },
       {
         detail: `${transactionRows.length} ledger entries`,
-        dot: "bg-indigo-500",
         label: "Net invested",
+        tone: "neutral" as const,
         value: formatMoney(netInvestedMinor),
       },
       {
         detail: `${mappedPercent}% of SIP mapped`,
-        dot: "bg-amber-500",
         label: "Monthly SIP",
+        tone: mappedPercent >= 100 ? ("good" as const) : ("warning" as const),
         value: formatMoney(totalMonthlySipMinor),
       },
     ],
     monthlyBars: getMonthlyTransactionBars(transactionRows),
     monthlySip: formatMoney(totalMonthlySipMinor),
     recentRows,
+    setupProgress,
   };
+}
+
+function SetupPanel({ progress }: { progress: SetupProgress }) {
+  const nextStep = progress.nextStep;
+
+  return (
+    <section className="border-border bg-card text-card-foreground mb-4 rounded-md border">
+      <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Setup</h2>
+            <StatusBadge tone="warning">
+              {progress.completed}/{progress.total} complete
+            </StatusBadge>
+          </div>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Finish the guided path to unlock useful projections and portfolio
+            tracking.
+          </p>
+        </div>
+        {nextStep ? (
+          <Button asChild size="sm">
+            <Link href={nextStep.href}>
+              {nextStep.actionLabel}
+              <ArrowRightIcon className="size-4" weight="bold" />
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <div className="bg-border grid gap-px sm:grid-cols-5">
+        {progress.steps.map((step) => (
+          <Link
+            aria-disabled={step.disabled}
+            className={cn(
+              "bg-card flex min-w-0 flex-col gap-2 p-3 transition",
+              step.disabled
+                ? "pointer-events-none opacity-55"
+                : "hover:bg-muted/50",
+            )}
+            href={step.href}
+            key={step.key}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-xs font-semibold">
+                {step.label}
+              </span>
+              <StatusBadge tone={step.done ? "good" : "neutral"}>
+                {step.done ? "Done" : "Open"}
+              </StatusBadge>
+            </div>
+            <p className="text-muted-foreground line-clamp-2 text-xs leading-5">
+              {step.status}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function EmptyState({
