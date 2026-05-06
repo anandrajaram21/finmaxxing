@@ -8,6 +8,11 @@ import {
 } from "@phosphor-icons/react/ssr";
 
 import { Button } from "@/components/ui/button";
+import {
+  FormattedNumber,
+  numberDisplay,
+  type NumberDisplayValue,
+} from "@/app/_components/number-popover";
 import { Sidebar, WorkspaceContent } from "@/app/_components/finance-workspace";
 import { getSession } from "@/server/better-auth/server";
 import { db } from "@/server/db";
@@ -18,6 +23,7 @@ import {
   portfolioAssumptions,
   transactions,
 } from "@/server/db/schema";
+import { getInvestmentMarketQuotes } from "@/server/yahoo-finance";
 import { cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
@@ -65,7 +71,7 @@ export default async function DashboardPage() {
                       <span className={cn("size-2", metric.dot)} />
                     </div>
                     <p className="mt-3 text-3xl font-semibold tracking-normal">
-                      {metric.value}
+                      {renderNumberValue(metric.value)}
                     </p>
                     <p className="text-muted-foreground mt-2 text-xs">
                       {metric.detail}
@@ -88,7 +94,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <p className="text-2xl font-semibold tracking-normal">
-                      {data.monthlySip}
+                      {renderNumberValue(data.monthlySip)}
                     </p>
                   </div>
                   {data.monthlyBars.length > 0 ? (
@@ -134,7 +140,7 @@ export default async function DashboardPage() {
                             <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
                               <span className="truncate">{row.label}</span>
                               <span className="text-muted-foreground shrink-0">
-                                {row.amount}
+                                {renderNumberValue(row.amount)}
                               </span>
                             </div>
                             <div className="bg-muted h-2 overflow-hidden">
@@ -212,7 +218,7 @@ export default async function DashboardPage() {
                             </p>
                           </div>
                           <p className="shrink-0 text-sm font-semibold">
-                            {goal.amount}
+                            {renderNumberValue(goal.amount)}
                           </p>
                         </div>
                       ))}
@@ -238,7 +244,7 @@ export default async function DashboardPage() {
                       {data.recentRows.map((row) => (
                         <div
                           className="flex items-center justify-between gap-4 px-4 py-3"
-                          key={`${row.date}-${row.label}-${row.amount}`}
+                          key={`${row.date}-${row.label}-${row.type}`}
                         >
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">
@@ -256,7 +262,7 @@ export default async function DashboardPage() {
                                 : "text-emerald-700 dark:text-emerald-300",
                             )}
                           >
-                            {row.amount}
+                            {renderNumberValue(row.amount)}
                           </p>
                         </div>
                       ))}
@@ -354,11 +360,17 @@ async function getDashboardData() {
     );
   }
 
+  const marketQuotes = await getInvestmentMarketQuotes(
+    investmentRows.map((investment) => investment.tickerSymbol),
+  );
   const currentValueMinor = investmentRows.reduce((sum, investment) => {
     const netUnits = netUnitsByInvestment.get(investment.id) ?? 0;
-    if (!investment.currentNav || netUnits <= 0) return sum;
+    const marketQuote = marketQuotes.get(investment.tickerSymbol.trim());
+    const currentNav = marketQuote?.price ?? investment.currentNav;
 
-    return sum + Math.round(netUnits * investment.currentNav * 100);
+    if (!currentNav || netUnits <= 0) return sum;
+
+    return sum + Math.round(netUnits * currentNav * 100);
   }, 0);
   const mappedSipMinor = allocationRows.reduce(
     (sum, allocation) =>
@@ -401,9 +413,7 @@ async function getDashboardData() {
     year: String(goal.targetYear),
   }));
   const recentRows = transactionRows.slice(0, 5).map((transaction) => ({
-    amount: `${transaction.type === "sell" ? "-" : "+"}${formatMoney(
-      transaction.amountMinor,
-    )}`,
+    amount: formatSignedMoney(transaction.amountMinor, transaction.type),
     date: formatDate(transaction.transactionDate),
     label: transaction.investmentName,
     type: transaction.type,
@@ -524,20 +534,43 @@ function getMonthlyTransactionBars(
 function formatMoney(valueMinor: number) {
   const sign = valueMinor < 0 ? "-" : "";
   const absValue = Math.abs(valueMinor) / 100;
+  const full = `${sign}INR ${absValue.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: absValue % 1 === 0 ? 0 : 2,
+  })}`;
 
   if (absValue >= 10_000_000) {
-    return `${sign}INR ${(absValue / 10_000_000).toFixed(2)}Cr`;
+    return numberDisplay(
+      `${sign}INR ${(absValue / 10_000_000).toFixed(2)}Cr`,
+      full,
+    );
   }
 
   if (absValue >= 100_000) {
-    return `${sign}INR ${(absValue / 100_000).toFixed(1)}L`;
+    return numberDisplay(
+      `${sign}INR ${(absValue / 100_000).toFixed(1)}L`,
+      full,
+    );
   }
 
   if (absValue >= 1_000) {
-    return `${sign}INR ${Math.round(absValue / 1_000)}k`;
+    return numberDisplay(`${sign}INR ${Math.round(absValue / 1_000)}k`, full);
   }
 
-  return `${sign}INR ${Math.round(absValue)}`;
+  return numberDisplay(`${sign}INR ${Math.round(absValue)}`, full);
+}
+
+function formatSignedMoney(valueMinor: number, type: "buy" | "sell") {
+  const display = formatMoney(valueMinor);
+  const sign = type === "sell" ? "-" : "+";
+
+  return numberDisplay(`${sign}${display.value}`, `${sign}${display.full}`);
+}
+
+function renderNumberValue(value: string | NumberDisplayValue) {
+  if (typeof value === "string") return value;
+
+  return <FormattedNumber value={value} />;
 }
 
 function formatDate(value: Date | number) {

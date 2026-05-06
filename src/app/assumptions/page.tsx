@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 
 import { Button } from "@/components/ui/button";
+import {
+  FormattedNumber,
+  numberDisplay,
+  type NumberDisplayValue,
+} from "@/app/_components/number-popover";
 import { db } from "@/server/db";
 import { portfolioAssumptions } from "@/server/db/schema";
 import { getSession } from "@/server/better-auth/server";
@@ -180,23 +185,32 @@ function AssumptionStat({
 }: {
   detail: string;
   label: string;
-  value: string;
+  value: string | NumberDisplayValue;
 }) {
   return (
     <div className="border-border bg-card text-card-foreground px-4 py-3">
       <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-normal">{value}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-normal">
+        {typeof value === "string" ? value : <FormattedNumber value={value} />}
+      </p>
       <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
     </div>
   );
 }
 
 function formatPercent(value: number) {
-  return value.toLocaleString("en-IN", {
+  const formatted = value.toLocaleString("en-IN", {
     maximumFractionDigits: 1,
     minimumFractionDigits: 0,
     style: "percent",
   });
+  const full = value.toLocaleString("en-IN", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
+    style: "percent",
+  });
+
+  return numberDisplay(formatted, full);
 }
 
 function parseInteger(value: FormDataEntryValue | null) {

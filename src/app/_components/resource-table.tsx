@@ -11,6 +11,12 @@ import {
 } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
+import {
+  FormattedNumber,
+  isNumberDisplayValue,
+  numberDisplay,
+  type NumberDisplayValue,
+} from "@/app/_components/number-popover";
 import { cn } from "@/lib/utils";
 import { api } from "@/trpc/react";
 
@@ -21,7 +27,7 @@ type TableColumn = {
 
 type TableRowDetail = {
   label: string;
-  value: string;
+  value: TableTextValue;
 };
 
 type ProgressCell = {
@@ -87,7 +93,9 @@ type TableRow = {
   tone?: "normal" | "muted" | "accent";
 };
 
-type TableCell = string | ProgressCell;
+type TableTextValue = string | NumberDisplayValue;
+
+type TableCell = TableTextValue | ProgressCell;
 
 export function ResourceTable({
   label,
@@ -240,7 +248,7 @@ function FragmentRow({
                     {detail.label}
                   </dt>
                   <dd className="mt-1 truncate text-sm font-medium">
-                    {detail.value}
+                    {renderTextValue(detail.value)}
                   </dd>
                 </div>
               ))}
@@ -253,15 +261,26 @@ function FragmentRow({
 }
 
 function renderCell(cell: TableCell) {
-  if (typeof cell === "string") return cell;
+  if (isTableTextValue(cell)) return renderTextValue(cell);
 
   return <ProgressCellView cell={cell} />;
 }
 
 function cellToText(cell: TableCell) {
   if (typeof cell === "string") return cell;
+  if (isNumberDisplayValue(cell)) return cell.value;
 
   return `${cell.currentMinor}-${cell.totalMinor}`;
+}
+
+function isTableTextValue(cell: TableCell): cell is TableTextValue {
+  return typeof cell === "string" || isNumberDisplayValue(cell);
+}
+
+function renderTextValue(value: TableTextValue) {
+  if (typeof value === "string") return value;
+
+  return <FormattedNumber value={value} />;
 }
 
 function ProgressCellView({ cell }: { cell: ProgressCell }) {
@@ -272,14 +291,16 @@ function ProgressCellView({ cell }: { cell: ProgressCell }) {
   return (
     <div className="ml-auto grid min-w-52 gap-1 text-left">
       <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="font-medium">{formatInrMinor(cell.currentMinor)}</span>
+        <span className="font-medium">
+          <FormattedNumber value={formatInrMinor(cell.currentMinor)} />
+        </span>
         <span className="text-muted-foreground">{percent}%</span>
       </div>
       <div className="bg-muted h-2 overflow-hidden rounded-none">
         <div className="bg-primary h-full" style={{ width: `${percent}%` }} />
       </div>
       <div className="text-muted-foreground text-xs">
-        of {formatInrMinor(cell.totalMinor)}
+        of <FormattedNumber value={formatInrMinor(cell.totalMinor)} />
       </div>
     </div>
   );
@@ -1182,15 +1203,24 @@ function parseDateInput(value: string) {
 
 function formatInrMinor(amountMinor: number) {
   const amount = amountMinor / 100;
+  const full = `INR ${amount.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  })}`;
 
   if (amount >= 10_000_000)
-    return `INR ${formatCompact(amount / 10_000_000)}Cr`;
-  if (amount >= 100_000) return `INR ${formatCompact(amount / 100_000)}L`;
-  if (amount >= 1_000) return `INR ${formatCompact(amount / 1_000)}k`;
+    return numberDisplay(`INR ${formatCompact(amount / 10_000_000)}Cr`, full);
+  if (amount >= 100_000)
+    return numberDisplay(`INR ${formatCompact(amount / 100_000)}L`, full);
+  if (amount >= 1_000)
+    return numberDisplay(`INR ${formatCompact(amount / 1_000)}k`, full);
 
-  return `INR ${amount.toLocaleString("en-IN", {
-    maximumFractionDigits: 0,
-  })}`;
+  return numberDisplay(
+    `INR ${amount.toLocaleString("en-IN", {
+      maximumFractionDigits: 0,
+    })}`,
+    full,
+  );
 }
 
 function formatCompact(value: number) {

@@ -35,6 +35,12 @@ import { DataBackupActions } from "./data-backup-actions";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
 import { MobileSidebarMenu } from "./mobile-sidebar-menu";
+import {
+  FormattedNumber,
+  isNumberDisplayValue,
+  numberDisplay,
+  type NumberDisplayValue,
+} from "./number-popover";
 import { ThemeToggle } from "./theme-toggle";
 import { TransactionCreateDialog } from "./transaction-create-dialog";
 import { ResourceDialog } from "./resource-dialog";
@@ -79,6 +85,7 @@ type TableColumn = {
 
 type TableCell =
   | string
+  | NumberDisplayValue
   | {
       currentMinor: number;
       kind: "progress";
@@ -90,14 +97,14 @@ type TableRow = {
   cells: TableCell[];
   details?: {
     label: string;
-    value: string;
+    value: string | NumberDisplayValue;
   }[];
   tone?: "normal" | "muted" | "accent";
 };
 
 type Stat = {
   label: string;
-  value: string;
+  value: string | NumberDisplayValue;
   detail: string;
 };
 
@@ -921,6 +928,19 @@ async function getWorkspaceData(
     });
   }
 
+  const totalInvestedMinor = Array.from(investmentReturns.values()).reduce(
+    (sum, investmentReturn) =>
+      sum +
+      Math.max(
+        0,
+        investmentReturn.totalBoughtMinor - investmentReturn.totalSoldMinor,
+      ),
+    0,
+  );
+  const totalCurrentValueMinor = Array.from(investmentReturns.values()).reduce(
+    (sum, investmentReturn) => sum + investmentReturn.currentValueMinor,
+    0,
+  );
   const savedByGoal = new Map<number, number>();
   for (const allocation of allocationRows) {
     const currentValueMinor =
@@ -1077,9 +1097,9 @@ async function getWorkspaceData(
             value: String(goalRows.length),
           },
           {
-            detail: `${formatPercent(assumption.inflationRate)} inflation from ${
-              assumption.currentYear
-            }`,
+            detail: `${formatPercentText(
+              assumption.inflationRate,
+            )} inflation from ${assumption.currentYear}`,
             label: "Projected need",
             value: formatInrMinor(totalProjectedNeedMinor),
           },
@@ -1134,18 +1154,14 @@ async function getWorkspaceData(
       investments: {
         stats: [
           {
-            detail: "Active holdings",
-            label: "Instruments",
-            value: String(
-              investmentsWithMarketQuotes.filter(
-                (investment) => investment.isActive,
-              ).length,
-            ),
+            detail: `${buyTransactions.length} buy transactions`,
+            label: "Total invested",
+            value: formatInrMinor(totalInvestedMinor),
           },
           {
-            detail: "Across investments",
-            label: "Monthly SIP",
-            value: formatInrMinor(totalMonthlySipMinor),
+            detail: `${investmentsWithMarketQuotes.length} tracked instruments`,
+            label: "Current value",
+            value: formatInrMinor(totalCurrentValueMinor),
           },
           {
             detail: latestNavUpdatedAt
@@ -1562,15 +1578,24 @@ function getDaySpan(startDate: Date, endDate: Date) {
 
 function formatInrMinor(amountMinor: number) {
   const amount = amountMinor / 100;
+  const full = `INR ${amount.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  })}`;
 
   if (amount >= 10_000_000)
-    return `INR ${formatCompact(amount / 10_000_000)}Cr`;
-  if (amount >= 100_000) return `INR ${formatCompact(amount / 100_000)}L`;
-  if (amount >= 1_000) return `INR ${formatCompact(amount / 1_000)}k`;
+    return numberDisplay(`INR ${formatCompact(amount / 10_000_000)}Cr`, full);
+  if (amount >= 100_000)
+    return numberDisplay(`INR ${formatCompact(amount / 100_000)}L`, full);
+  if (amount >= 1_000)
+    return numberDisplay(`INR ${formatCompact(amount / 1_000)}k`, full);
 
-  return `INR ${amount.toLocaleString("en-IN", {
-    maximumFractionDigits: 0,
-  })}`;
+  return numberDisplay(
+    `INR ${amount.toLocaleString("en-IN", {
+      maximumFractionDigits: 0,
+    })}`,
+    full,
+  );
 }
 
 function formatCompact(value: number) {
@@ -1583,31 +1608,48 @@ function formatCompact(value: number) {
 function formatNav(value: number | null) {
   if (value === null) return "n/a";
 
-  return value.toLocaleString("en-IN", {
+  const formatted = value.toLocaleString("en-IN", {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   });
+  return numberDisplay(formatted, formatted);
 }
 
 function formatPercent(value: number) {
-  return `${Math.round(value * 100)}%`;
+  return numberDisplay(`${Math.round(value * 100)}%`, formatPercentText(value));
+}
+
+function formatPercentText(value: number) {
+  return value.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    style: "percent",
+  });
 }
 
 function formatUnits(value: number) {
-  return value.toLocaleString("en-IN", {
+  const formatted = value.toLocaleString("en-IN", {
     maximumFractionDigits: 3,
     minimumFractionDigits: 0,
   });
+  return numberDisplay(formatted, formatted);
 }
 
 function formatXirr(value: number | null) {
   if (value === null) return "n/a";
 
-  return value.toLocaleString("en-IN", {
+  const formatted = value.toLocaleString("en-IN", {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
     style: "percent",
   });
+  const full = value.toLocaleString("en-IN", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
+    style: "percent",
+  });
+
+  return numberDisplay(formatted, full);
 }
 
 function formatDate(date: Date) {
@@ -1809,7 +1851,11 @@ function StatsGrid({ stats }: { stats: Stat[] }) {
         >
           <p className="text-muted-foreground text-xs">{stat.label}</p>
           <p className="mt-1 text-2xl font-semibold tracking-normal">
-            {stat.value}
+            {isNumberDisplayValue(stat.value) ? (
+              <FormattedNumber value={stat.value} />
+            ) : (
+              stat.value
+            )}
           </p>
           <p className="text-muted-foreground mt-1 text-xs">{stat.detail}</p>
         </div>
