@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AuthAction } from "./auth-action";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
+import { DataBackupActions } from "./data-backup-actions";
 import { GoalCreateDialog } from "./goal-create-dialog";
 import { InvestmentCreateDialog } from "./investment-create-dialog";
 import { MobileSidebarMenu } from "./mobile-sidebar-menu";
@@ -1725,6 +1726,7 @@ function AuthPanel({
           {session.user?.email}
         </p>
       </div>
+      <DataBackupActions />
       <AuthAction className="w-full" signedIn />
     </div>
   ) : (
