@@ -32,16 +32,14 @@ export default async function AssumptionsPage() {
   const assumptions = await getAssumptions(session.user.id);
 
   return (
-    <main className="bg-background text-foreground h-screen overflow-hidden">
+    <main className="text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey="assumptions" />
         <WorkspaceContent>
-          <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:px-10">
+          <header className="border-border/70 flex flex-col gap-4 border-b px-4 py-6 sm:px-6 lg:px-10">
             <div className="min-w-0">
-              <div className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                Model
-              </div>
-              <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
+              <div className="finance-pill">Model</div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-normal sm:text-4xl">
                 Assumptions
               </h1>
               <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
@@ -70,15 +68,18 @@ export default async function AssumptionsPage() {
               />
             </div>
 
-            <section className="border-border bg-card text-card-foreground mt-6 max-w-2xl border">
-              <div className="border-b px-4 py-3">
+            <section className="finance-panel mt-6 max-w-2xl overflow-hidden">
+              <div className="border-border/70 border-b px-4 py-3">
                 <h2 className="text-sm font-semibold">Projection inputs</h2>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Use realistic rates so goal pressure stays useful.
+                </p>
               </div>
               <form action={saveAssumptions} className="grid gap-4 p-4">
                 <label className="grid gap-1.5">
                   <span className="text-xs font-medium">Base year</span>
                   <input
-                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
+                    className="border-input bg-background/70 focus-visible:ring-ring focus-visible:ring-ring/30 h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
                     defaultValue={assumptions.currentYear}
                     min="1900"
                     name="currentYear"
@@ -93,7 +94,7 @@ export default async function AssumptionsPage() {
                     Inflation rate (%)
                   </span>
                   <input
-                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
+                    className="border-input bg-background/70 focus-visible:ring-ring focus-visible:ring-ring/30 h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
                     defaultValue={toPercentInput(assumptions.inflationRate)}
                     min="0"
                     name="inflationRate"
@@ -108,7 +109,7 @@ export default async function AssumptionsPage() {
                     Expected return rate (%)
                   </span>
                   <input
-                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
+                    className="border-input bg-background/70 focus-visible:ring-ring focus-visible:ring-ring/30 h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
                     defaultValue={toPercentInput(
                       assumptions.expectedReturnRate,
                     )}
@@ -188,7 +189,7 @@ function AssumptionStat({
   value: string | NumberDisplayValue;
 }) {
   return (
-    <div className="border-border bg-card text-card-foreground px-4 py-3">
+    <div className="finance-panel-soft px-4 py-4">
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-normal">
         {typeof value === "string" ? value : <FormattedNumber value={value} />}

@@ -4,8 +4,10 @@ import {
   ArrowsSplitIcon,
   ChartLineUpIcon,
   CurrencyInrIcon,
+  GaugeIcon,
   ReceiptIcon,
   ShieldCheckIcon,
+  SparkleIcon,
   TargetIcon,
   TrendUpIcon,
 } from "@phosphor-icons/react/ssr";
@@ -60,6 +62,14 @@ const allocationRows = [
   { label: "Reserve", value: "14%", width: "w-[14%]", color: "bg-amber-500" },
 ];
 
+const setupSteps = [
+  "Set assumptions",
+  "Add goals",
+  "Add investments",
+  "Record transactions",
+  "Map allocations",
+];
+
 type HomePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -70,13 +80,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const authRequired = params.auth === "required";
 
   return (
-    <main className="bg-background text-foreground min-h-screen overflow-hidden">
+    <main className="text-foreground min-h-screen overflow-hidden">
       <div className="relative min-h-screen">
-        <div className="absolute inset-x-0 top-0 h-72 bg-[linear-gradient(180deg,oklch(0.945_0.035_184),transparent)] dark:bg-[linear-gradient(180deg,oklch(0.27_0.035_204),transparent)]" />
         <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 sm:px-6 lg:px-8">
-          <header className="flex items-center justify-between gap-4 border-b py-4">
+          <header className="border-border/70 flex items-center justify-between gap-4 border-b py-4">
             <Link href="/" className="flex min-w-0 items-center gap-3">
-              <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-sm">
+              <span className="bg-primary text-primary-foreground flex size-10 shrink-0 items-center justify-center rounded-lg shadow-[0_12px_30px_oklch(0.55_0.15_164/0.25)]">
                 <CurrencyInrIcon className="size-5" weight="bold" />
               </span>
               <span className="min-w-0">
@@ -84,7 +93,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   Finmaxxing
                 </span>
                 <span className="text-muted-foreground block truncate text-xs">
-                  Portfolio workspace
+                  Wealth command center
                 </span>
               </span>
             </Link>
@@ -101,7 +110,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </header>
 
           {authRequired ? (
-            <div className="border-border bg-card/90 mt-4 flex flex-col gap-3 border px-4 py-3 shadow-[0_12px_36px_oklch(0_0_0/0.06)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="finance-panel mt-4 flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex size-8 shrink-0 items-center justify-center bg-amber-500/10 text-amber-700 dark:text-amber-300">
                   <ShieldCheckIcon className="size-4" weight="bold" />
@@ -119,18 +128,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </div>
           ) : null}
 
-          <section className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:py-14">
+          <section className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[minmax(0,0.88fr)_minmax(420px,1.12fr)] lg:py-14">
             <div className="max-w-3xl">
-              <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-                <ShieldCheckIcon className="size-4" weight="bold" />
+              <div className="finance-pill">
+                <SparkleIcon className="size-3.5" weight="bold" />
                 Private finance tracker
               </div>
               <h1 className="mt-5 max-w-2xl text-4xl font-semibold tracking-normal text-balance sm:text-5xl lg:text-6xl">
-                See every goal, SIP, and allocation in one calm view.
+                Make your money plan obvious.
               </h1>
               <p className="text-muted-foreground mt-5 max-w-xl text-sm leading-7 sm:text-base">
-                Plan long-term targets, track investment activity, and keep
-                portfolio flows aligned with the life you are funding.
+                A private workspace for goals, investments, transactions, and
+                allocation decisions, organized around the next thing to do.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg">
@@ -146,25 +155,35 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   </Link>
                 </Button>
               </div>
+              <div className="mt-8 grid gap-2 sm:grid-cols-5">
+                {setupSteps.map((step, index) => (
+                  <div className="finance-panel-soft px-3 py-2" key={step}>
+                    <p className="text-primary text-xs font-semibold">
+                      0{index + 1}
+                    </p>
+                    <p className="mt-1 text-xs leading-5">{step}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="border-border bg-card/85 text-card-foreground shadow-[0_24px_80px_oklch(0_0_0/0.12)] backdrop-blur">
-              <div className="flex items-center justify-between border-b px-4 py-3">
+            <div className="finance-panel overflow-hidden">
+              <div className="border-border/70 flex items-center justify-between border-b px-4 py-3">
                 <div>
                   <p className="text-sm font-semibold">Portfolio snapshot</p>
                   <p className="text-muted-foreground mt-1 text-xs">
                     Current plan
                   </p>
                 </div>
-                <div className="bg-primary/10 text-primary flex items-center gap-1 px-2 py-1 text-xs font-medium">
-                  <TrendUpIcon className="size-3.5" weight="bold" />
-                  On track
+                <div className="finance-pill">
+                  <GaugeIcon className="size-3.5" weight="bold" />
+                  Example flow
                 </div>
               </div>
 
-              <div className="bg-border grid gap-px border-b sm:grid-cols-3">
+              <div className="border-border/70 bg-border/70 grid gap-px border-b sm:grid-cols-3">
                 {metrics.map((metric) => (
-                  <div key={metric.label} className="bg-card px-4 py-4">
+                  <div key={metric.label} className="bg-card/82 px-4 py-4">
                     <p className="text-muted-foreground text-xs">
                       {metric.label}
                     </p>
@@ -200,8 +219,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                             {row.value}
                           </span>
                         </div>
-                        <div className="bg-muted h-2 overflow-hidden">
-                          <div className={`${row.color} h-full ${row.width}`} />
+                        <div className="bg-muted h-2 overflow-hidden rounded-full">
+                          <div
+                            className={`${row.color} h-full rounded-full ${row.width}`}
+                          />
                         </div>
                       </div>
                     ))}
@@ -214,12 +235,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
                     return (
                       <Link
-                        className="border-border hover:bg-muted/70 group flex items-center justify-between gap-3 border px-3 py-3 transition"
+                        className="border-border/70 bg-background/45 hover:bg-muted/70 group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition"
                         href={item.href}
                         key={item.href}
                       >
                         <span className="flex min-w-0 items-center gap-3">
-                          <span className="bg-muted flex size-9 shrink-0 items-center justify-center">
+                          <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-md">
                             <Icon className="size-4" weight="bold" />
                           </span>
                           <span className="min-w-0">

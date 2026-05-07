@@ -663,7 +663,7 @@ export async function FinanceWorkspace({
   };
 
   return (
-    <main className="bg-background text-foreground h-screen overflow-hidden">
+    <main className="text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey={sectionKey} />
         <div className="min-h-0 min-w-0 flex-1 overflow-auto">
@@ -694,7 +694,7 @@ export function WorkspaceBackdrop() {
   return (
     <div
       aria-hidden="true"
-      className="absolute inset-x-0 top-0 h-80 bg-[linear-gradient(180deg,oklch(0.955_0.028_178),transparent)] dark:bg-[linear-gradient(180deg,oklch(0.255_0.04_212),transparent)]"
+      className="absolute inset-x-0 top-0 h-96 bg-[radial-gradient(circle_at_20%_0%,oklch(0.68_0.16_164/0.24),transparent_28rem),radial-gradient(circle_at_86%_12%,oklch(0.78_0.14_74/0.2),transparent_24rem)] dark:bg-[radial-gradient(circle_at_20%_0%,oklch(0.62_0.16_164/0.18),transparent_28rem),radial-gradient(circle_at_86%_12%,oklch(0.72_0.13_74/0.12),transparent_24rem)]"
     />
   );
 }
@@ -1677,18 +1677,18 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
   const session = await getSession();
 
   return (
-    <aside className="border-border bg-sidebar/70 flex w-full shrink-0 flex-col border-b lg:h-full lg:w-68 lg:border-r lg:border-b-0">
-      <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:block lg:border-b">
+    <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground flex w-full shrink-0 flex-col border-b shadow-[16px_0_60px_oklch(0_0_0/0.18)] lg:h-full lg:w-72 lg:border-r lg:border-b-0">
+      <div className="lg:border-sidebar-border relative flex items-center justify-between gap-3 px-4 py-4 lg:block lg:border-b">
         <Link href="/" className="flex items-center gap-3">
-          <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-sm">
+          <span className="bg-sidebar-primary text-sidebar-primary-foreground flex size-10 items-center justify-center rounded-lg shadow-[0_12px_30px_oklch(0.65_0.16_164/0.25)]">
             <CurrencyInrIcon className="size-5" weight="bold" />
           </span>
           <span>
-            <span className="block text-sm font-semibold tracking-wide">
+            <span className="text-sidebar-foreground block text-sm font-semibold tracking-wide">
               Finmaxxing
             </span>
-            <span className="text-muted-foreground block text-xs">
-              Portfolio workspace
+            <span className="text-sidebar-foreground/58 block text-xs">
+              Wealth command center
             </span>
           </span>
         </Link>
@@ -1702,7 +1702,7 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
               />
             ))}
           </nav>
-          <div className="border-t p-3">
+          <div className="border-sidebar-border border-t p-3">
             <div className="mb-3">
               <ThemeToggle />
             </div>
@@ -1711,13 +1711,16 @@ export async function Sidebar({ activeKey }: { activeKey: SectionKey }) {
         </MobileSidebarMenu>
       </div>
 
+      <div className="text-sidebar-foreground/45 hidden px-4 pt-4 text-[0.65rem] font-semibold tracking-wider uppercase lg:block">
+        Workspace
+      </div>
       <nav className="hidden gap-1 p-3 lg:grid">
         {navItems.map((item) => (
           <SidebarNavLink activeKey={activeKey} item={item} key={item.key} />
         ))}
       </nav>
 
-      <div className="mt-auto hidden border-t p-3 lg:block lg:shrink-0">
+      <div className="border-sidebar-border bg-sidebar-accent/35 mx-3 mt-auto mb-3 hidden rounded-lg border p-3 lg:block lg:shrink-0">
         <div className="mb-3">
           <ThemeToggle />
         </div>
@@ -1741,14 +1744,33 @@ function SidebarNavLink({
     <Link
       href={item.href}
       className={cn(
-        "flex h-10 items-center gap-2 rounded-sm px-3 text-sm transition",
+        "group flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
         isActive
-          ? "bg-sidebar-primary text-sidebar-primary-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_12px_28px_oklch(0.65_0.16_164/0.18)]"
+          : "text-sidebar-foreground/78 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       )}
     >
-      <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
-      <span>{item.label}</span>
+      <span
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-md",
+          isActive ? "bg-black/10" : "bg-sidebar-accent/60",
+        )}
+      >
+        <Icon className="size-4" weight={isActive ? "bold" : "regular"} />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate">{item.label}</span>
+        <span
+          className={cn(
+            "block truncate text-[0.68rem]",
+            isActive
+              ? "text-sidebar-primary-foreground/70"
+              : "text-sidebar-foreground/42",
+          )}
+        >
+          {item.eyebrow}
+        </span>
+      </span>
     </Link>
   );
 }
@@ -1761,10 +1783,10 @@ function AuthPanel({
   return session ? (
     <div className="space-y-3">
       <div>
-        <p className="truncate text-sm font-medium">
+        <p className="text-sidebar-foreground truncate text-sm font-medium">
           {session.user?.name ?? "Signed in"}
         </p>
-        <p className="text-muted-foreground truncate text-xs">
+        <p className="text-sidebar-foreground/55 truncate text-xs">
           {session.user?.email}
         </p>
       </div>
@@ -1773,7 +1795,7 @@ function AuthPanel({
     </div>
   ) : (
     <div className="space-y-3">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-sidebar-foreground/62 text-xs leading-5">
         Sign in to save portfolio records to your account.
       </p>
       <AuthAction callbackURL="/goals" className="w-full" signedIn={false} />
@@ -1792,13 +1814,13 @@ function WorkspaceHeader({
   const action = sectionActions[section.key];
 
   return (
-    <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
+    <header className="border-border/70 flex flex-col gap-5 border-b px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
       <div className="min-w-0">
-        <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-          <Icon className="size-4" weight="bold" />
+        <div className="finance-pill">
+          <Icon className="size-3.5" weight="bold" />
           <span>{section.eyebrow}</span>
         </div>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
+        <h1 className="mt-3 text-3xl font-semibold tracking-normal text-balance sm:text-4xl">
           {section.title}
         </h1>
         <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
@@ -1844,12 +1866,19 @@ function WorkspaceHeader({
 function StatsGrid({ stats }: { stats: Stat[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="border-border bg-card text-card-foreground px-4 py-3"
-        >
-          <p className="text-muted-foreground text-xs">{stat.label}</p>
+      {stats.map((stat, index) => (
+        <div key={stat.label} className="finance-panel-soft px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-muted-foreground text-xs">{stat.label}</p>
+            <span
+              className={cn(
+                "size-2 rounded-full",
+                index === 0 && "bg-primary",
+                index === 1 && "bg-chart-2",
+                index === 2 && "bg-chart-3",
+              )}
+            />
+          </div>
           <p className="mt-1 text-2xl font-semibold tracking-normal">
             {isNumberDisplayValue(stat.value) ? (
               <FormattedNumber value={stat.value} />

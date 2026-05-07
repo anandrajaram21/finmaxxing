@@ -76,18 +76,18 @@ export default async function InstructionsPage() {
   if (!session?.user?.id) redirect("/?auth=required");
 
   return (
-    <main className="bg-background text-foreground h-screen overflow-hidden">
+    <main className="text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey="instructions" />
         <WorkspaceContent>
-          <header className="border-border flex flex-col gap-4 border-b px-4 py-5 sm:px-6 lg:px-10">
+          <header className="border-border/70 flex flex-col gap-4 border-b px-4 py-6 sm:px-6 lg:px-10">
             <div className="min-w-0">
-              <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-                <BookOpenTextIcon className="size-4" weight="bold" />
+              <div className="finance-pill">
+                <BookOpenTextIcon className="size-3.5" weight="bold" />
                 <span>Guide</span>
               </div>
-              <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
-                Instructions
+              <h1 className="mt-3 text-3xl font-semibold tracking-normal sm:text-4xl">
+                Getting started
               </h1>
               <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
                 Use this workflow to keep goals, investments, transactions, and
@@ -125,8 +125,8 @@ export default async function InstructionsPage() {
             </section>
 
             <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="border-border bg-card text-card-foreground border">
-                <div className="border-b px-4 py-3">
+              <div className="finance-panel overflow-hidden">
+                <div className="border-border/70 border-b px-4 py-3">
                   <h2 className="text-sm font-semibold">Working routine</h2>
                 </div>
                 <div className="grid gap-4 p-4 text-sm leading-6">
@@ -153,11 +153,11 @@ export default async function InstructionsPage() {
                 </div>
               </div>
 
-              <div className="border-border bg-card text-card-foreground border">
-                <div className="border-b px-4 py-3">
+              <div className="finance-panel-soft overflow-hidden">
+                <div className="border-border/70 border-b px-4 py-3">
                   <h2 className="text-sm font-semibold">Reference</h2>
                 </div>
-                <div className="divide-border divide-y">
+                <div className="divide-border/70 divide-y">
                   {referenceItems.map((item) => (
                     <div key={item.title} className="p-4">
                       <h3 className="text-sm font-semibold">{item.title}</h3>
@@ -186,7 +186,7 @@ function GuideStat({
   value: string;
 }) {
   return (
-    <div className="border-border bg-card text-card-foreground px-4 py-3">
+    <div className="finance-panel-soft px-4 py-4">
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-normal">{value}</p>
       <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
@@ -198,12 +198,12 @@ function GuideStepCard({ step }: { step: GuideStep }) {
   const Icon = step.icon;
 
   return (
-    <article className="border-border bg-card text-card-foreground border p-4">
+    <article className="finance-panel-soft p-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground text-xs font-medium">
-          {step.label}
+        <span className="text-primary text-xs font-semibold">{step.label}</span>
+        <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-md">
+          <Icon className="size-4" weight="bold" />
         </span>
-        <Icon className="text-muted-foreground size-4" weight="bold" />
       </div>
       <h3 className="mt-3 text-sm font-semibold">{step.title}</h3>
       <p className="text-muted-foreground mt-2 text-sm leading-6">

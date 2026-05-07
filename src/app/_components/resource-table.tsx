@@ -4,7 +4,9 @@ import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRightIcon,
   CaretRightIcon,
+  DatabaseIcon,
   PencilSimpleIcon,
   TrashIcon,
   XIcon,
@@ -111,60 +113,92 @@ export function ResourceTable({
   const hasActions = rows.some((row) => row.action);
 
   return (
-    <section className="border-border bg-card text-card-foreground min-w-0 border">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">{label}</h2>
-        <span className="text-muted-foreground text-xs">
-          {rows.length} rows
-        </span>
+    <section className="finance-panel min-w-0 overflow-hidden">
+      <div className="border-border/70 flex items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">{label}</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Expand rows for details, edit records in place.
+          </p>
+        </div>
+        <span className="finance-pill shrink-0">{rows.length} rows</span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-muted/50 text-muted-foreground border-b text-xs">
-              {tableColumns.map((column) => (
-                <th
-                  key={column.label}
-                  className={cn(
-                    "px-4 py-2 font-medium",
-                    alignmentClass(column.align),
-                  )}
-                >
-                  {column.label}
-                </th>
-              ))}
-              {hasActions ? (
-                <th className="px-4 py-2 text-right font-medium">Actions</th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const rowKey = row.action
-                ? `${row.action.kind}-${row.action.id}`
-                : row.cells.map(cellToText).join("-");
-              const isExpanded = expandedRow === rowKey;
-              const canExpand = Boolean(row.details?.length);
+      {rows.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] border-collapse text-sm">
+            <thead>
+              <tr className="bg-muted/45 text-muted-foreground border-border/70 border-b text-xs">
+                {tableColumns.map((column) => (
+                  <th
+                    key={column.label}
+                    className={cn(
+                      "px-4 py-3 font-semibold",
+                      alignmentClass(column.align),
+                    )}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+                {hasActions ? (
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Actions
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const rowKey = row.action
+                  ? `${row.action.kind}-${row.action.id}`
+                  : row.cells.map(cellToText).join("-");
+                const isExpanded = expandedRow === rowKey;
+                const canExpand = Boolean(row.details?.length);
 
-              return (
-                <FragmentRow
-                  canExpand={canExpand}
-                  isExpanded={isExpanded}
-                  key={rowKey}
-                  hasActions={hasActions}
-                  onToggle={() =>
-                    setExpandedRow(isExpanded || !canExpand ? null : rowKey)
-                  }
-                  row={row}
-                  tableColumns={tableColumns}
-                  showButton={hasExpandableRows}
-                />
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                return (
+                  <FragmentRow
+                    canExpand={canExpand}
+                    isExpanded={isExpanded}
+                    key={rowKey}
+                    hasActions={hasActions}
+                    onToggle={() =>
+                      setExpandedRow(isExpanded || !canExpand ? null : rowKey)
+                    }
+                    row={row}
+                    tableColumns={tableColumns}
+                    showButton={hasExpandableRows}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <TableEmptyState label={label} />
+      )}
     </section>
+  );
+}
+
+function TableEmptyState({ label }: { label: string }) {
+  return (
+    <div className="grid min-h-72 place-items-center p-6">
+      <div className="max-w-sm text-center">
+        <span className="bg-primary/10 text-primary mx-auto flex size-12 items-center justify-center rounded-xl">
+          <DatabaseIcon className="size-6" weight="bold" />
+        </span>
+        <h3 className="mt-4 text-base font-semibold">
+          No {label.toLowerCase()} yet
+        </h3>
+        <p className="text-muted-foreground mt-2 text-sm leading-6">
+          Start with the action at the top right. The dashboard becomes useful
+          once goals, investments, transactions, and allocations are connected.
+        </p>
+        <div className="text-muted-foreground mt-4 inline-flex items-center gap-1 text-xs">
+          Add the first record
+          <ArrowRightIcon className="size-3.5" weight="bold" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -189,8 +223,8 @@ function FragmentRow({
     <>
       <tr
         className={cn(
-          "border-border border-b",
-          row.tone === "accent" && "bg-primary/5",
+          "border-border/60 hover:bg-muted/35 border-b transition-colors",
+          row.tone === "accent" && "bg-primary/7",
           row.tone === "muted" && "text-muted-foreground",
           isExpanded && "bg-muted/30",
         )}
@@ -199,7 +233,7 @@ function FragmentRow({
           <td
             key={`${cellToText(cell)}-${index}`}
             className={cn(
-              "px-4 py-3 align-middle",
+              "px-4 py-3.5 align-middle",
               alignmentClass(tableColumns[index]?.align),
             )}
           >
@@ -236,14 +270,17 @@ function FragmentRow({
         ) : null}
       </tr>
       {isExpanded ? (
-        <tr className="border-border bg-muted/20 border-b">
+        <tr className="border-border/60 bg-muted/25 border-b">
           <td
             className="px-4 py-4"
             colSpan={tableColumns.length + (hasActions ? 1 : 0)}
           >
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {row.details?.map((detail) => (
-                <div key={detail.label} className="min-w-0">
+                <div
+                  key={detail.label}
+                  className="border-border/60 bg-background/55 min-w-0 rounded-md border p-3"
+                >
                   <dt className="text-muted-foreground text-xs">
                     {detail.label}
                   </dt>
@@ -296,8 +333,11 @@ function ProgressCellView({ cell }: { cell: ProgressCell }) {
         </span>
         <span className="text-muted-foreground">{percent}%</span>
       </div>
-      <div className="bg-muted h-2 overflow-hidden rounded-none">
-        <div className="bg-primary h-full" style={{ width: `${percent}%` }} />
+      <div className="bg-muted h-2 overflow-hidden rounded-full">
+        <div
+          className="bg-primary h-full rounded-full"
+          style={{ width: `${percent}%` }}
+        />
       </div>
       <div className="text-muted-foreground text-xs">
         of <FormattedNumber value={formatInrMinor(cell.totalMinor)} />

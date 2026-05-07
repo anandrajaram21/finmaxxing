@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import {
   ArrowRightIcon,
+  CheckCircleIcon,
   ReceiptIcon,
+  RocketLaunchIcon,
   TrendUpIcon,
 } from "@phosphor-icons/react/ssr";
 
@@ -30,45 +32,53 @@ export default async function DashboardPage() {
   const data = await getDashboardData();
 
   return (
-    <main className="bg-background text-foreground h-screen overflow-hidden">
+    <main className="text-foreground h-screen overflow-hidden">
       <div className="flex h-full w-full flex-col lg:flex-row">
         <Sidebar activeKey="dashboard" />
         <WorkspaceContent>
           <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
             <section>
-              <div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
+              <div className="border-border/70 flex flex-col gap-5 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-                    <TrendUpIcon className="size-4" weight="bold" />
+                  <div className="finance-pill">
+                    <TrendUpIcon className="size-3.5" weight="bold" />
                     Dashboard
                   </div>
                   <h1 className="mt-3 text-3xl font-semibold tracking-normal text-balance sm:text-4xl lg:text-5xl">
-                    Money map for the next big decisions.
+                    Your portfolio operating room.
                   </h1>
                   <p className="text-muted-foreground mt-3 max-w-2xl text-sm leading-6">
                     A compact view of goal pressure, portfolio momentum, monthly
                     flow, and the records that need attention.
                   </p>
                 </div>
-                <Button asChild size="lg" variant="outline">
-                  <Link href="/transactions">
-                    Add activity
-                    <ReceiptIcon className="size-4" weight="bold" />
-                  </Link>
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button asChild size="lg">
+                    <Link href="/transactions">
+                      Add activity
+                      <ReceiptIcon className="size-4" weight="bold" />
+                    </Link>
+                  </Button>
+                  <Button asChild size="lg" variant="outline">
+                    <Link href="/instructions">
+                      Setup guide
+                      <RocketLaunchIcon className="size-4" weight="bold" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {data.metrics.map((metric) => (
                   <div
-                    className="border-border bg-card/90 text-card-foreground border px-4 py-4 shadow-[0_16px_48px_oklch(0_0_0/0.07)] backdrop-blur"
+                    className="finance-panel-soft px-4 py-4"
                     key={metric.label}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-muted-foreground text-xs">
                         {metric.label}
                       </p>
-                      <span className={cn("size-2", metric.dot)} />
+                      <span className={cn("size-2 rounded-full", metric.dot)} />
                     </div>
                     <p className="mt-3 text-3xl font-semibold tracking-normal">
                       {renderNumberValue(metric.value)}
@@ -83,8 +93,8 @@ export default async function DashboardPage() {
 
             <section className="mt-6 grid gap-6 pb-8 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
               <div className="space-y-6">
-                <div className="border-border bg-card text-card-foreground border">
-                  <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
+                <div className="finance-panel overflow-hidden">
+                  <div className="border-border/70 flex items-center justify-between gap-4 border-b px-4 py-3">
                     <div>
                       <p className="text-sm font-semibold">
                         Monthly trajectory
@@ -104,9 +114,9 @@ export default async function DashboardPage() {
                           className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2"
                           key={bar.label}
                         >
-                          <div className="bg-muted relative min-h-8 overflow-hidden">
+                          <div className="bg-muted relative min-h-8 overflow-hidden rounded-t-lg">
                             <div
-                              className="absolute inset-x-0 bottom-0 bg-teal-500"
+                              className="bg-primary absolute inset-x-0 bottom-0 rounded-t-lg"
                               style={{ height: `${bar.value}%` }}
                             />
                           </div>
@@ -126,8 +136,8 @@ export default async function DashboardPage() {
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="border-border bg-card text-card-foreground border">
-                    <div className="border-b px-4 py-3">
+                  <div className="finance-panel-soft overflow-hidden">
+                    <div className="border-border/70 border-b px-4 py-3">
                       <p className="text-sm font-semibold">Goal funding</p>
                       <p className="text-muted-foreground mt-1 text-xs">
                         SIP allocation by target
@@ -143,9 +153,9 @@ export default async function DashboardPage() {
                                 {renderNumberValue(row.amount)}
                               </span>
                             </div>
-                            <div className="bg-muted h-2 overflow-hidden">
+                            <div className="bg-muted h-2 overflow-hidden rounded-full">
                               <div
-                                className="h-full bg-indigo-500"
+                                className="bg-chart-2 h-full rounded-full"
                                 style={{
                                   width: `${Math.min(100, Math.max(row.value, 6))}%`,
                                 }}
@@ -163,8 +173,8 @@ export default async function DashboardPage() {
                     )}
                   </div>
 
-                  <div className="border-border bg-card text-card-foreground border">
-                    <div className="border-b px-4 py-3">
+                  <div className="finance-panel-soft overflow-hidden">
+                    <div className="border-border/70 border-b px-4 py-3">
                       <p className="text-sm font-semibold">Setup health</p>
                       <p className="text-muted-foreground mt-1 text-xs">
                         Data needed for useful projections
@@ -173,19 +183,29 @@ export default async function DashboardPage() {
                     <div className="grid gap-2 p-4">
                       {data.checklist.map((item) => (
                         <div
-                          className="border-border flex items-center justify-between gap-3 border px-3 py-2"
+                          className="border-border/70 bg-background/45 flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
                           key={item.label}
                         >
                           <span className="truncate text-sm">{item.label}</span>
                           <span
                             className={cn(
-                              "px-2 py-1 text-xs font-medium",
+                              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
                               item.done
                                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                                 : "bg-amber-500/10 text-amber-700 dark:text-amber-300",
                             )}
                           >
-                            {item.done ? "Done" : "Needs data"}
+                            {item.done ? (
+                              <>
+                                <CheckCircleIcon
+                                  className="size-3.5"
+                                  weight="bold"
+                                />
+                                Done
+                              </>
+                            ) : (
+                              "Needs data"
+                            )}
                           </span>
                         </div>
                       ))}
@@ -195,15 +215,15 @@ export default async function DashboardPage() {
               </div>
 
               <div className="space-y-6">
-                <div className="border-border bg-card text-card-foreground border">
-                  <div className="border-b px-4 py-3">
+                <div className="finance-panel-soft overflow-hidden">
+                  <div className="border-border/70 border-b px-4 py-3">
                     <p className="text-sm font-semibold">Closest goals</p>
                     <p className="text-muted-foreground mt-1 text-xs">
                       Sorted by target year
                     </p>
                   </div>
                   {data.goalRows.length > 0 ? (
-                    <div className="divide-border divide-y">
+                    <div className="divide-border/70 divide-y">
                       {data.goalRows.map((goal) => (
                         <div
                           className="flex items-center justify-between gap-4 px-4 py-3"
@@ -232,15 +252,15 @@ export default async function DashboardPage() {
                   )}
                 </div>
 
-                <div className="border-border bg-card text-card-foreground border">
-                  <div className="border-b px-4 py-3">
+                <div className="finance-panel-soft overflow-hidden">
+                  <div className="border-border/70 border-b px-4 py-3">
                     <p className="text-sm font-semibold">Recent activity</p>
                     <p className="text-muted-foreground mt-1 text-xs">
                       Latest ledger entries
                     </p>
                   </div>
                   {data.recentRows.length > 0 ? (
-                    <div className="divide-border divide-y">
+                    <div className="divide-border/70 divide-y">
                       {data.recentRows.map((row) => (
                         <div
                           className="flex items-center justify-between gap-4 px-4 py-3"
