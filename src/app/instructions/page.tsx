@@ -33,7 +33,7 @@ const workflowSteps: GuideStep[] = [
     title: "Add goals",
   },
   {
-    body: "Add every fund, ETF, or stock with its ticker symbol and monthly SIP. Yahoo Finance is used to fetch the current NAV where possible.",
+    body: "Add every mutual fund, ETF, or stock with its type, quote identifier, and monthly SIP. Stocks use Yahoo Finance; mutual funds use MFAPI scheme codes.",
     icon: ChartLineUpIcon,
     label: "03",
     title: "Add investments",
@@ -54,8 +54,8 @@ const workflowSteps: GuideStep[] = [
 
 const referenceItems = [
   {
-    title: "Ticker symbols",
-    body: "Use the Yahoo Finance ticker for each investment. For Indian exchange symbols without a suffix, the app also tries NSE and BSE variants.",
+    title: "Quote identifiers",
+    body: "Use a Yahoo Finance ticker for stocks and ETFs. Use an MFAPI scheme code for mutual funds. For Indian stock symbols without a suffix, the app also tries NSE and BSE variants.",
   },
   {
     title: "Current value",
@@ -139,8 +139,8 @@ export default async function InstructionsPage() {
                     title="2. Maintain goals first"
                   />
                   <InstructionBlock
-                    body="Use tickers that Yahoo Finance recognizes. Current NAV is pulled from the ticker and used for current value, XIRR, and goal progress."
-                    title="3. Check investment tickers"
+                    body="Use Yahoo Finance tickers for stocks and MFAPI scheme codes for mutual funds. Current NAV is pulled from the selected source and used for current value, XIRR, and goal progress."
+                    title="3. Check quote identifiers"
                   />
                   <InstructionBlock
                     body="For each buy or sell, enter amount and NAV. Units are calculated automatically, and transaction dates determine return calculations."

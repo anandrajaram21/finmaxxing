@@ -5,6 +5,8 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { type db as database } from "@/server/db";
 import { investments } from "@/server/db/schema";
+import { getInvestmentMarketQuotes } from "@/server/investment-market-quotes";
+import { investmentTypes } from "@/lib/investments";
 
 const idInput = z.object({
   id: z.number().int().positive(),
@@ -18,6 +20,7 @@ const optionalTextInput = (max: number) =>
   );
 
 const investmentCreateInput = z.object({
+  investmentType: z.enum(investmentTypes).default("stock"),
   monthlySipMinor: z.number().int().nonnegative(),
   name: z.string().trim().min(1).max(255),
   tickerSymbol: z.string().trim().min(1).max(64),
@@ -27,6 +30,7 @@ const investmentUpdateInput = idInput
   .extend({
     category: optionalTextInput(128),
     currentNav: z.number().positive().nullable().optional(),
+    investmentType: z.enum(investmentTypes).optional(),
     isActive: z.boolean().optional(),
     isin: optionalTextInput(32),
     monthlySipMinor: z.number().int().nonnegative().optional(),
@@ -37,6 +41,7 @@ const investmentUpdateInput = idInput
     ({
       category,
       currentNav,
+      investmentType,
       isActive,
       isin,
       monthlySipMinor,
@@ -45,6 +50,7 @@ const investmentUpdateInput = idInput
     }) =>
       category !== undefined ||
       currentNav !== undefined ||
+      investmentType !== undefined ||
       isActive !== undefined ||
       isin !== undefined ||
       monthlySipMinor !== undefined ||
@@ -92,6 +98,7 @@ export const investmentsRouter = createTRPCRouter({
         .insert(investments)
         .values({
           monthlySipMinor: input.monthlySipMinor,
+          investmentType: input.investmentType,
           name: input.name,
           tickerSymbol: input.tickerSymbol,
           userId: ctx.session.user.id,
@@ -143,6 +150,9 @@ export const investmentsRouter = createTRPCRouter({
                 navUpdatedAt: input.currentNav === null ? null : new Date(),
               }
             : {}),
+          ...(input.investmentType !== undefined
+            ? { investmentType: input.investmentType }
+            : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           ...(input.isin !== undefined ? { isin: input.isin } : {}),
           ...(input.monthlySipMinor !== undefined
@@ -191,6 +201,50 @@ export const investmentsRouter = createTRPCRouter({
     }
 
     return investment;
+  }),
+
+  refreshMarketValues: protectedProcedure.mutation(async ({ ctx }) => {
+    const userInvestments = await ctx.db
+      .select({
+        id: investments.id,
+        investmentType: investments.investmentType,
+        tickerSymbol: investments.tickerSymbol,
+      })
+      .from(investments)
+      .where(eq(investments.userId, ctx.session.user.id))
+      .orderBy(asc(investments.name));
+
+    const marketQuotes = await getInvestmentMarketQuotes(userInvestments);
+
+    const now = new Date();
+    let updated = 0;
+
+    for (const investment of userInvestments) {
+      const marketQuote = marketQuotes.get(investment.tickerSymbol.trim());
+      if (!marketQuote) continue;
+
+      await ctx.db
+        .update(investments)
+        .set({
+          currentNav: marketQuote.price,
+          navUpdatedAt: marketQuote.regularMarketTime ?? now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(investments.id, investment.id),
+            eq(investments.userId, ctx.session.user.id),
+          ),
+        );
+
+      updated += 1;
+    }
+
+    return {
+      skipped: userInvestments.length - updated,
+      total: userInvestments.length,
+      updated,
+    };
   }),
 });
 

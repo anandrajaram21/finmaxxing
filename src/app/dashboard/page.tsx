@@ -23,7 +23,7 @@ import {
   portfolioAssumptions,
   transactions,
 } from "@/server/db/schema";
-import { getInvestmentMarketQuotes } from "@/server/yahoo-finance";
+import { getInvestmentMarketQuotes } from "@/server/investment-market-quotes";
 import { cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
@@ -361,7 +361,10 @@ async function getDashboardData() {
   }
 
   const marketQuotes = await getInvestmentMarketQuotes(
-    investmentRows.map((investment) => investment.tickerSymbol),
+    investmentRows.map((investment) => ({
+      investmentType: investment.investmentType,
+      tickerSymbol: investment.tickerSymbol,
+    })),
   );
   const currentValueMinor = investmentRows.reduce((sum, investment) => {
     const netUnits = netUnitsByInvestment.get(investment.id) ?? 0;

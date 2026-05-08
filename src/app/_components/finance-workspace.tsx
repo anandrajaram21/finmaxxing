@@ -15,6 +15,11 @@ import {
 } from "@phosphor-icons/react/ssr";
 import type { Icon } from "@phosphor-icons/react";
 
+import {
+  formatInvestmentType,
+  type InvestmentType,
+  investmentTypes,
+} from "@/lib/investments";
 import { getSession } from "@/server/better-auth/server";
 import { db } from "@/server/db";
 import {
@@ -27,7 +32,7 @@ import {
 import {
   getInvestmentMarketQuotes,
   type InvestmentMarketQuote,
-} from "@/server/yahoo-finance";
+} from "@/server/investment-market-quotes";
 import { cn } from "@/lib/utils";
 import { AuthAction } from "./auth-action";
 import { AllocationCreateDialog } from "./allocation-create-dialog";
@@ -240,7 +245,7 @@ const sections: Record<SectionKey, Section> = {
     eyebrow: "Portfolio",
     title: "Investments",
     description:
-      "Maintain each instrument, ticker symbol, and recurring SIP amount.",
+      "Maintain each instrument, type, quote identifier, and recurring SIP amount.",
     icon: ChartLineUpIcon,
     actionLabel: "Add investment",
     stats: [
@@ -255,9 +260,14 @@ const sections: Record<SectionKey, Section> = {
         placeholder: "Nifty 50 Index",
       },
       {
-        label: "Ticker symbol",
+        label: "Ticker / scheme code",
         name: "tickerSymbol",
         placeholder: "NIFTYBEES",
+      },
+      {
+        label: "Type",
+        name: "investmentType",
+        placeholder: "stock",
       },
       {
         label: "SIP amount",
@@ -267,7 +277,7 @@ const sections: Record<SectionKey, Section> = {
       },
     ],
     tableColumns: [
-      { label: "Fund name" },
+      { label: "Instrument" },
       { label: "Invested", align: "right" },
       { label: "Current value", align: "right" },
       { label: "XIRR", align: "right" },
@@ -466,7 +476,11 @@ const sections: Record<SectionKey, Section> = {
     actionLabel: "Read guide",
     stats: [
       { label: "Setup", value: "5 steps", detail: "From assumptions to goals" },
-      { label: "Tracking", value: "NAV", detail: "Prices come from tickers" },
+      {
+        label: "Tracking",
+        value: "NAV",
+        detail: "Prices come from quote sources",
+      },
       { label: "Progress", value: "Live", detail: "Allocations drive goals" },
     ],
     fields: [],
@@ -551,6 +565,7 @@ async function saveInvestment(formData: FormData) {
     .values({
       category: parseOptionalText(formData.get("category")),
       currentNav,
+      investmentType: parseInvestmentType(formData.get("investmentType")),
       isin: parseOptionalText(formData.get("isin")),
       monthlySipMinor: parseMoneyMinor(
         formData.get("monthlySipMinor"),
@@ -558,13 +573,17 @@ async function saveInvestment(formData: FormData) {
       ),
       name: parseText(formData.get("name"), "Investment name"),
       navUpdatedAt: currentNav ? new Date() : null,
-      tickerSymbol: parseText(formData.get("tickerSymbol"), "Ticker symbol"),
+      tickerSymbol: parseText(
+        formData.get("tickerSymbol"),
+        "Ticker / scheme code",
+      ),
       userId,
     })
     .onConflictDoUpdate({
       set: {
         category: parseOptionalText(formData.get("category")),
         currentNav,
+        investmentType: parseInvestmentType(formData.get("investmentType")),
         isin: parseOptionalText(formData.get("isin")),
         monthlySipMinor: parseMoneyMinor(
           formData.get("monthlySipMinor"),
@@ -778,7 +797,10 @@ async function getWorkspaceData(
     sectionKey === "investments" ||
     sectionKey === "transactions"
       ? await getInvestmentMarketQuotes(
-          investmentRows.map((investment) => investment.tickerSymbol),
+          investmentRows.map((investment) => ({
+            investmentType: investment.investmentType,
+            tickerSymbol: investment.tickerSymbol,
+          })),
         )
       : new Map<string, InvestmentMarketQuote>();
   const investmentsWithMarketQuotes = investmentRows.map((investment) => {
@@ -1282,7 +1304,9 @@ function getInvestmentRow(
     ? toDate(investment.navUpdatedAt)
     : null;
   const navSource = investment.marketQuote
-    ? `Yahoo ${investment.marketQuote.yahooSymbol}`
+    ? investment.marketQuote.source === "mfapi"
+      ? `MFAPI ${investment.marketQuote.sourceSymbol}`
+      : `Yahoo ${investment.marketQuote.sourceSymbol}`
     : "Saved value";
 
   return {
@@ -1291,6 +1315,7 @@ function getInvestmentRow(
       kind: "investment",
       values: {
         monthlySipMinor: investment.monthlySipMinor,
+        investmentType: investment.investmentType,
         name: investment.name,
         tickerSymbol: investment.tickerSymbol,
       },
@@ -1302,7 +1327,11 @@ function getInvestmentRow(
       formatXirr(xirr),
     ],
     details: [
-      { label: "Ticker symbol", value: investment.tickerSymbol },
+      { label: "Ticker / scheme code", value: investment.tickerSymbol },
+      {
+        label: "Type",
+        value: formatInvestmentType(investment.investmentType),
+      },
       { label: "Average NAV", value: formatNav(averageNav) },
       { label: "Current NAV", value: formatNav(investment.currentNav ?? null) },
       { label: "NAV source", value: navSource },
@@ -1416,6 +1445,16 @@ function parseOptionalPositiveNumber(
   if (typeof value !== "string" || value.trim() === "") return null;
 
   return parsePositiveNumber(value, label);
+}
+
+function parseInvestmentType(value: FormDataEntryValue | null): InvestmentType {
+  if (typeof value !== "string" || value.trim() === "") return "stock";
+
+  if (investmentTypes.includes(value as InvestmentType)) {
+    return value as InvestmentType;
+  }
+
+  throw new Error("Investment type must be stock or mutual fund.");
 }
 
 function parseMoneyMinor(value: FormDataEntryValue | null, label: string) {

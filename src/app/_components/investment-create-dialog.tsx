@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import { PlusIcon, XIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
+import {
+  investmentTypeLabels,
+  type InvestmentType,
+  investmentTypes,
+} from "@/lib/investments";
 import { api } from "@/trpc/react";
 
 type InvestmentCreateDialogProps = {
@@ -18,6 +23,7 @@ export function InvestmentCreateDialog({
   label,
 }: InvestmentCreateDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [investmentType, setInvestmentType] = useState<InvestmentType>("stock");
   const [name, setName] = useState("");
   const [tickerSymbol, setTickerSymbol] = useState("");
   const [monthlySip, setMonthlySip] = useState("");
@@ -57,6 +63,7 @@ export function InvestmentCreateDialog({
   }, [createInvestment.isPending, isOpen]);
 
   function resetForm() {
+    setInvestmentType("stock");
     setName("");
     setTickerSymbol("");
     setMonthlySip("");
@@ -76,12 +83,15 @@ export function InvestmentCreateDialog({
     setFormError(null);
 
     if (!isFormValid || monthlySipMinor === null) {
-      setFormError("Enter an investment name, ticker symbol, and monthly SIP.");
+      setFormError(
+        "Enter an investment name, quote identifier, and monthly SIP.",
+      );
       return;
     }
 
     try {
       await createInvestment.mutateAsync({
+        investmentType,
         monthlySipMinor,
         name: name.trim(),
         tickerSymbol: tickerSymbol.trim(),
@@ -154,19 +164,46 @@ export function InvestmentCreateDialog({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5">
-                  <span className="text-xs font-medium">Ticker symbol</span>
+                  <span className="text-xs font-medium">Type</span>
+                  <select
+                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
+                    name="investmentType"
+                    onChange={(event) =>
+                      setInvestmentType(event.target.value as InvestmentType)
+                    }
+                    required
+                    value={investmentType}
+                  >
+                    {investmentTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {investmentTypeLabels[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-medium">
+                    {investmentType === "mutual_fund"
+                      ? "MFAPI scheme code"
+                      : "Yahoo ticker"}
+                  </span>
                   <input
                     autoCapitalize="characters"
                     className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-sm border px-3 text-sm outline-none focus-visible:ring-1"
                     name="tickerSymbol"
                     onChange={(event) => setTickerSymbol(event.target.value)}
-                    placeholder="NIFTYBEES"
+                    placeholder={
+                      investmentType === "mutual_fund" ? "125497" : "NIFTYBEES"
+                    }
                     required
                     type="text"
                     value={tickerSymbol}
                   />
                 </label>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="text-xs font-medium">SIP amount</span>
                   <input

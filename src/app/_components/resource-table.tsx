@@ -17,6 +17,11 @@ import {
   numberDisplay,
   type NumberDisplayValue,
 } from "@/app/_components/number-popover";
+import {
+  investmentTypeLabels,
+  type InvestmentType,
+  investmentTypes,
+} from "@/lib/investments";
 import { cn } from "@/lib/utils";
 import { api } from "@/trpc/react";
 
@@ -66,6 +71,7 @@ export type TableRowAction =
       kind: "investment";
       id: number;
       values: {
+        investmentType: InvestmentType;
         monthlySipMinor: number;
         name: string;
         tickerSymbol: string;
@@ -755,6 +761,9 @@ function InvestmentEditDialog({
   onClose: () => void;
 }) {
   const [name, setName] = useState(action.values.name);
+  const [investmentType, setInvestmentType] = useState(
+    action.values.investmentType,
+  );
   const [tickerSymbol, setTickerSymbol] = useState(action.values.tickerSymbol);
   const [monthlySip, setMonthlySip] = useState(
     String(action.values.monthlySipMinor / 100),
@@ -775,13 +784,16 @@ function InvestmentEditDialog({
     setFormError(null);
 
     if (!isValid || monthlySipMinor === null) {
-      setFormError("Enter an investment name, ticker symbol, and SIP amount.");
+      setFormError(
+        "Enter an investment name, quote identifier, and SIP amount.",
+      );
       return;
     }
 
     try {
       await updateInvestment.mutateAsync({
         id: action.id,
+        investmentType,
         monthlySipMinor,
         name: name.trim(),
         tickerSymbol: tickerSymbol.trim(),
@@ -811,12 +823,30 @@ function InvestmentEditDialog({
           value={name}
         />
         <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            label="Type"
+            onChange={(value) => setInvestmentType(value as InvestmentType)}
+            options={investmentTypes.map((type) => ({
+              label: investmentTypeLabels[type],
+              value: type,
+            }))}
+            placeholder="Select type"
+            value={investmentType}
+          />
           <TextField
-            label="Ticker symbol"
+            label={
+              investmentType === "mutual_fund"
+                ? "MFAPI scheme code"
+                : "Yahoo ticker"
+            }
             onChange={setTickerSymbol}
-            placeholder="NIFTYBEES"
+            placeholder={
+              investmentType === "mutual_fund" ? "125497" : "NIFTYBEES"
+            }
             value={tickerSymbol}
           />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             inputMode="decimal"
             label="SIP amount"

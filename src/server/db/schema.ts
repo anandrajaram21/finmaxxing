@@ -7,6 +7,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+import { investmentTypes } from "@/lib/investments";
+
 /**
  * Multi-project schema prefix helper
  */
@@ -185,6 +187,10 @@ export const investments = createTable(
       .references(() => user.id, { onDelete: "cascade" }),
     name: d.text({ length: 255 }).notNull(),
     tickerSymbol: d.text({ length: 64 }).notNull(),
+    investmentType: d
+      .text({ length: 32, enum: investmentTypes })
+      .notNull()
+      .default("stock"),
     isin: d.text({ length: 32 }),
     category: d.text({ length: 128 }),
     monthlySipMinor: d.integer({ mode: "number" }).notNull().default(0),

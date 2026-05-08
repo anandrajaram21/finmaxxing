@@ -23,10 +23,11 @@ export type InvestmentMarketQuote = {
   price: number;
   quoteType: string | null;
   regularMarketTime: Date | null;
-  yahooSymbol: string;
+  source: "yahoo" | "mfapi";
+  sourceSymbol: string;
 };
 
-export async function getInvestmentMarketQuotes(
+export async function getYahooInvestmentMarketQuotes(
   tickerSymbols: string[],
 ): Promise<Map<string, InvestmentMarketQuote>> {
   const uniqueTickerSymbols = Array.from(
@@ -82,7 +83,8 @@ async function getInvestmentMarketQuote(
         quote.regularMarketTime instanceof Date
           ? quote.regularMarketTime
           : null,
-      yahooSymbol:
+      source: "yahoo",
+      sourceSymbol:
         typeof quote.symbol === "string" && quote.symbol.length > 0
           ? quote.symbol
           : candidate,

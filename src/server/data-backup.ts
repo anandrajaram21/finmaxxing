@@ -1,6 +1,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { investmentTypes } from "@/lib/investments";
 import { db } from "@/server/db";
 import {
   allocations,
@@ -55,6 +56,7 @@ const backupSchema = z.object({
         createdAt: backupDate,
         currentNav: z.number().positive().nullable(),
         id: z.number().int().positive(),
+        investmentType: z.enum(investmentTypes).default("stock"),
         isActive: z.boolean(),
         isin: z.string().max(32).nullable(),
         monthlySipMinor: z.number().int().nonnegative(),
@@ -151,6 +153,7 @@ export async function exportFinanceBackup(
         createdAt: toIsoDate(investment.createdAt),
         currentNav: investment.currentNav,
         id: investment.id,
+        investmentType: investment.investmentType,
         isActive: investment.isActive,
         isin: investment.isin,
         monthlySipMinor: investment.monthlySipMinor,
@@ -226,6 +229,7 @@ export async function importFinanceBackup(userId: string, input: unknown) {
           category: investment.category,
           createdAt: parseBackupDate(investment.createdAt),
           currentNav: investment.currentNav,
+          investmentType: investment.investmentType,
           isActive: investment.isActive,
           isin: investment.isin,
           monthlySipMinor: investment.monthlySipMinor,
